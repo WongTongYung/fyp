@@ -1,7 +1,6 @@
 import cv2
 import threading
 import queue
-import time
 
 # --- 1. Define Your Processing Function ---
 # This function represents your "Video processing" and "Vision module"
@@ -117,7 +116,7 @@ if __name__ == "__main__":
     # Setup Video Writer ("Video storage")
     # Using 'XVID' codec. Use 'mp4v' for .mp4 files.
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
+    out = cv2.VideoWriter('styles/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
     if not out.isOpened():
         print("Error: Could not open video writer.")
         cap.release()

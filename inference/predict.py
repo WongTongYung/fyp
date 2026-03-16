@@ -1,9 +1,9 @@
 from ultralytics import YOLO
 import os
 
-model = YOLO("yolo11m-custom.pt")
+model = YOLO("models/yolo11m-custom.pt")
 
-image_folder = "Pickleball Vision.v6i.yolov11/test/images/"
+image_folder = "Pickleball Vision.v9i.yolov11/test/images/"
 
 
 for filename in os.listdir(image_folder):
