@@ -1,0 +1,23 @@
+# Model weights (large files)
+*.pt
+*.pth
+*.onnx
+*.weights
+
+# Video files
+*.mp4
+*.avi
+*.mov
+
+# Training runs (large outputs)
+runs/
+
+# Dataset directories (if large)
+Pickleball*/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+venv/

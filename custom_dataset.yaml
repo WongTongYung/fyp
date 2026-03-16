@@ -1,0 +1,13 @@
+train: C:\Users\user\Desktop\sem7\fyp\code new\Pickleball Vision.v9i.yolov11\train\images
+val: C:\Users\user\Desktop\sem7\fyp\code new\Pickleball Vision.v9i.yolov11\valid\images
+test: C:\Users\user\Desktop\sem7\fyp\code new\Pickleball Vision.v9i.yolov11\test\images
+
+nc: 1
+names: ['ball']
+
+roboflow:
+  workspace: liberin-technologies
+  project: pickleball-vision
+  version: 6
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/liberin-technologies/pickleball-vision/dataset/6
