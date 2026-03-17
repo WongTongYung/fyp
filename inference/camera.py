@@ -62,84 +62,35 @@ def save_thread(out, save_queue, stop_event):
             
     print("Save thread stopped.")
 
-def processing_thread(process_queue, stop_event):
-    """
-    Thread function to process frames.
-    This corresponds to "Video processing", "Vision module", etc.
-    """
-    print("Starting processing thread...")
-    while not stop_event.is_set() or not process_queue.empty():
-        try:
-            # Get a frame from the queue, wait 1 second if empty
-            frame = process_queue.get(timeout=1)
+def processing_thread(process_queue, stop_event, model, coord_queue):
+    while not stop_event.is_set():
+        if not process_queue.empty():
+            frame = process_queue.get()
             
-            # Run your vision logic
-            processed_frame = processing_function(frame)
+            # Run YOLO inference
+            results = model.predict(frame, conf=0.3, verbose=False)
             
-            # Display the result (part of your "Scoreboard" or analysis)
-            cv2.imshow('Processed Stream', processed_frame)
+            # Extract ball coordinates
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                    confidence = box.conf[0].item()
+                    # Center point of the ball
+                    cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                    
+                    #print(f"Ball detected at ({cx:.1f}, {cy:.1f}) conf={confidence:.2f}")
+                    
+                    if not coord_queue.full():
+                        coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": confidence})
+
+                
+                # Draw detections on frame
+                annotated = result.plot()
             
+            cv2.imshow('Processed Stream', annotated if results[0].boxes else frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 stop_event.set()
                 break
-                
-        except queue.Empty:
-            if stop_event.is_set():
-                break # Exit loop if stop is requested and queue is empty
-            continue # Continue waiting if not stopped
             
     print("Processing thread stopped.")
-
-# --- 3. Main Execution ---
-
-if __name__ == "__main__":
-    # --- Setup ---
-    # Queues to hold frames (buffers)
-    # maxsize limits RAM usage
-    save_queue = queue.Queue(maxsize=128)
-    process_queue = queue.Queue(maxsize=32)
-    
-    # Event to signal threads to stop
-    stop_event = threading.Event()
-
-    # Setup Camera ("Camera")
-    cap = cv2.VideoCapture(0) # 0 for webcam
-    if not cap.isOpened():
-        print("Error: Could not open video source.")
-        exit()
-
-    # Get video properties for the writer
-    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = int(cap.get(cv2.CAP_PROP_FPS))
-    
-    # Setup Video Writer ("Video storage")
-    # Using 'XVID' codec. Use 'mp4v' for .mp4 files.
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter('styles/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
-    if not out.isOpened():
-        print("Error: Could not open video writer.")
-        cap.release()
-        exit()
-
-    print(f"Starting streams... (Press 'q' in the 'Processed Stream' window to quit)")
-
-    # --- Create and Start Threads ---
-    t1 = threading.Thread(target=capture_thread, args=(cap, save_queue, process_queue, stop_event))
-    t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event))
-    t3 = threading.Thread(target=processing_thread, args=(process_queue, stop_event))
-    
-    t1.start()
-    t2.start()
-    t3.start()
-    
-    # --- Wait for Threads to Finish ---
-    t1.join()
-    t2.join()
-    t3.join()
-    
-    # --- Cleanup ---
-    print("All threads joined. Cleaning up.")
-    cap.release()
-    out.release()
-    cv2.destroyAllWindows()

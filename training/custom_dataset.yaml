@@ -1,6 +1,6 @@
-train: C:\Users\user\Desktop\sem8\fyp\code new\Pickleball Vision.v9i.yolov11\train\images
-val: C:\Users\user\Desktop\sem8\fyp\code new\Pickleball Vision.v9i.yolov11\valid\images
-test: C:\Users\user\Desktop\sem8\fyp\code new\Pickleball Vision.v9i.yolov11\test\images
+train: C:\Users\user\Desktop\sem8\fyp\code new\training\Pickleball Vision.v9i.yolov11\train\images
+val: C:\Users\user\Desktop\sem8\fyp\code new\training\Pickleball Vision.v9i.yolov11\valid\images
+test: C:\Users\user\Desktop\sem8\fyp\code new\training\Pickleball Vision.v9i.yolov11\test\images
 
 nc: 1
 names: ['ball']
