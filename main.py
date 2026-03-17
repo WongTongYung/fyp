@@ -5,6 +5,8 @@ import queue
 from inference.camera import capture_thread, save_thread, processing_thread
 from ultralytics import YOLO
 from database import init_db, start_match, end_match
+from server import run_server, set_status
+from game_logic import game_logic_thread
 
 model = YOLO("models/yolo11m-custom.pt")
 
@@ -45,22 +47,30 @@ if __name__ == "__main__":
         exit()
 
     print("Starting streams... (Press 'q' in the 'Processed Stream' window to quit)")
+    print("Dashboard: http://localhost:5000")
 
     # --- Create and Start Threads ---
+    flask_t = threading.Thread(target=run_server, daemon=True)
     t1 = threading.Thread(target=capture_thread, args=(cap, save_queue, process_queue, stop_event))
     t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event))
     t3 = threading.Thread(target=processing_thread, args=(process_queue, stop_event, model, coord_queue))
-    
+    t4 = threading.Thread(target=game_logic_thread, args=(coord_queue, stop_event, match_id))
+
+    flask_t.start()
+    set_status("live")
     t1.start()
     t2.start()
     t3.start()
+    t4.start()
     
     # --- Wait for Threads to Finish ---
     t1.join()
     t2.join()
     t3.join()
+    t4.join()
     
     # --- Cleanup ---
+    set_status("stopped")
     end_match(match_id)
     print(f"Match ended (ID: {match_id}). Cleaning up.")
     cap.release()

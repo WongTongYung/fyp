@@ -75,5 +75,36 @@ document.addEventListener('keydown', function (e) {
     }
 });
 
+// --- Poll Flask /score every second ---
+function pollScore() {
+    fetch('/score')
+        .then(r => r.json())
+        .then(data => {
+            servingScore   = data.serving;
+            receivingScore = data.receiving;
+            serverNumber   = data.server;
+            updateScoreboard();
+
+            // Sync status
+            const statusEl = document.getElementById('status');
+            if (data.status === 'live') {
+                isRunning = true;
+                statusEl.textContent = '(Status: Live)';
+                statusEl.classList.add('live');
+            } else if (data.status === 'stopped') {
+                isRunning = false;
+                statusEl.textContent = '(Status: Stopped)';
+                statusEl.classList.remove('live');
+            }
+
+            // Append new log entries
+            const logBox = document.getElementById('logBox');
+            const currentCount = logBox.children.length;
+            data.log.slice(currentCount).forEach(msg => addLog(msg));
+        })
+        .catch(() => {}); // silently ignore if server not running
+}
+setInterval(pollScore, 1000);
+
 // Initialize
 updateScoreboard();

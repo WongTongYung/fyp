@@ -1,5 +1,4 @@
 import cv2
-import threading
 import queue
 
 # --- 1. Define Your Processing Function ---
@@ -12,10 +11,6 @@ def processing_function(frame):
     # Example: Convert to grayscale and apply a blur
     processed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     processed_frame = cv2.GaussianBlur(processed_frame, (7, 7), 0)
-    
-    # Simulate a slow process (like a heavy neural network)
-    # REMOVE THIS IN YOUR REAL APPLICATION
-    #time.sleep(0.05) # Simulate 50ms processing time
     
     return processed_frame
 
