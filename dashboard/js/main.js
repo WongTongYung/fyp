@@ -43,6 +43,7 @@ document.getElementById('startBtn').addEventListener('click', function () {
 
 document.getElementById('stopBtn').addEventListener('click', function () {
     if (!isRunning) return;
+    fetch('/stop', { method: 'POST' });
     isRunning = false;
     document.getElementById('status').textContent = '(Status: Stopped)';
     document.getElementById('status').classList.remove('live');

@@ -1,5 +1,6 @@
-from flask import Flask, jsonify, render_template, send_from_directory
+from flask import Flask, jsonify, render_template, send_from_directory, Response
 import threading
+import cv2
 
 app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
 
@@ -12,6 +13,37 @@ score_state = {
     "log": []           # recent events
 }
 _lock = threading.Lock()
+_stop_event = None
+
+
+def set_stop_event(event):
+    """Pass main's stop_event so the /stop route can trigger shutdown."""
+    global _stop_event
+    _stop_event = event
+
+
+# Shared latest frame for MJPEG streaming
+_frame = None
+_frame_lock = threading.Lock()
+
+
+def push_frame(frame):
+    """Called by processing_thread to share the latest annotated frame."""
+    global _frame
+    with _frame_lock:
+        _frame = frame.copy()
+
+
+def _generate_frames():
+    """Generator that yields JPEG frames for MJPEG stream."""
+    while True:
+        with _frame_lock:
+            frame = _frame
+        if frame is None:
+            continue
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
 
 def update_score(serving, receiving, server):
@@ -46,6 +78,20 @@ def index():
 def score():
     with _lock:
         return jsonify(score_state)
+
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(_generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/stop', methods=['POST'])
+def stop():
+    if _stop_event:
+        _stop_event.set()
+    set_status("stopped")
+    return jsonify({"status": "stopped"})
 
 
 @app.route('/css/<path:filename>')

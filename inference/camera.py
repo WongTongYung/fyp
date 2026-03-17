@@ -1,5 +1,7 @@
 import cv2
 import queue
+import time
+from server import push_frame
 
 # --- 1. Define Your Processing Function ---
 # This function represents your "Video processing" and "Vision module"
@@ -16,27 +18,32 @@ def processing_function(frame):
 
 # --- 2. Define Thread Functions ---
 
-def capture_thread(cap, save_queue, process_queue, stop_event):
+def capture_thread(cap, save_queue, process_queue, stop_event, fps=0):
     """
     Thread function to read frames from the camera.
     This corresponds to the "Camera" block.
+    fps: if > 0, sleep between frames to match video speed (for file sources).
+         Leave as 0 for webcam — hardware already limits the rate.
     """
     print("Starting capture thread...")
+    frame_delay = 1.0 / fps if fps > 0 else 0
+
     while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
             print("Failed to grab frame, stopping.")
             stop_event.set()
             break
-            
-        # Put the raw frame into both queues
-        # This "splits" the stream from the diagram
+
         if not save_queue.full():
-            save_queue.put(frame.copy()) # "Saves Raw File" stream
-            
+            save_queue.put(frame.copy())
+
         if not process_queue.full():
-            process_queue.put(frame.copy()) # "Raw video stream"
-            
+            process_queue.put(frame.copy())
+
+        if frame_delay:
+            time.sleep(frame_delay)
+
     print("Capture thread stopped.")
 
 def save_thread(out, save_queue, stop_event):
@@ -82,10 +89,7 @@ def processing_thread(process_queue, stop_event, model, coord_queue):
                 
                 # Draw detections on frame
                 annotated = result.plot()
-            
-            cv2.imshow('Processed Stream', annotated if results[0].boxes else frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                stop_event.set()
-                break
+
+            push_frame(annotated if results[0].boxes else frame)
             
     print("Processing thread stopped.")
