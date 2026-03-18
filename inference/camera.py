@@ -2,7 +2,7 @@ import cv2
 import queue
 import time
 import numpy as np
-from server import push_frame
+from server import push_frame, set_frame_pos
 
 # --- 1. Define Your Processing Function ---
 # This function represents your "Video processing" and "Vision module"
@@ -46,6 +46,8 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
         return
 
     frame_delay = 1.0 / fps if fps > 0 else 0
+    frame_count = 0
+    report_fps = fps if fps > 0 else 30
     while not stop_event.is_set():
         if pause_event and pause_event.is_set():
             time.sleep(0.1)
@@ -56,6 +58,10 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
             print("Failed to grab frame, stopping.")
             stop_event.set()
             break
+
+        frame_count += 1
+        if frame_count % 30 == 0:
+            set_frame_pos(frame_count, report_fps)
 
         if not save_queue.full():
             save_queue.put(frame.copy())

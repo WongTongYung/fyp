@@ -9,7 +9,7 @@ import time
 from inference.camera import capture_thread, save_thread, processing_thread
 from ultralytics import YOLO
 from database import init_db, start_match, end_match
-from server import run_server, set_status, set_stop_event, set_pause_event, set_start_callback, add_log
+from server import run_server, set_status, set_stop_event, set_pause_event, set_start_callback, set_source, add_log
 from game_logic import game_logic_thread
 from calibration import get_court, calibration_thread
 
@@ -38,6 +38,7 @@ def run_pipeline(source):
     is_file = source != 0
     IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.webp'}
     is_image = is_file and os.path.splitext(str(source))[1].lower() in IMAGE_EXTS
+    set_source(source)
 
     static_frame = None
     cap = None

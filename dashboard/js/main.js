@@ -42,7 +42,7 @@ document.getElementById('startBtn').addEventListener('click', function () {
         // Resume paused pipeline
         fetch('/resume', { method: 'POST' })
             .then(r => r.json())
-            .then(() => addLog('Resumed.'))
+            .then(() => { switchToLiveFeed(); addLog('Resumed.'); })
             .catch(err => addLog('Resume failed: ' + err));
     } else {
         // Fresh start
@@ -56,6 +56,7 @@ document.getElementById('startBtn').addEventListener('click', function () {
         .then(r => r.json())
         .then(data => {
             if (data.status === 'started') {
+                switchToLiveFeed();
                 addLog('System starting with source: ' + (source === 0 ? 'webcam' : source));
             } else {
                 addLog('Start failed: ' + (data.error || 'Unknown error'));
@@ -74,8 +75,44 @@ document.getElementById('stopBtn').addEventListener('click', function () {
 });
 
 document.getElementById('rewindBtn').addEventListener('click', function () {
-    addLog('Rewind requested.');
+    if (!isRunning) return;
+    fetch('/pause', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => addLog('Camera paused.'))
+        .catch(err => addLog('Pause failed: ' + err));
+
+    fetch('/score')
+        .then(r => r.json())
+        .then(data => {
+            const src = data.source;
+            if (!src) { addLog('Rewind: no file source (webcam mode).'); return; }
+
+            const currentTimeSec = data.frame_pos / data.fps;
+            const REWIND_SEC = 10;
+            const seekTo = Math.max(0, currentTimeSec - REWIND_SEC);
+
+            const live = document.getElementById('liveFeed');
+            const rewind = document.getElementById('rewindFeed');
+            rewind.src = '/' + src.replace(/\\/g, '/');
+            live.style.display = 'none';
+            rewind.style.display = 'block';
+
+            rewind.onloadedmetadata = function () {
+                rewind.currentTime = seekTo;
+                rewind.play();
+            };
+
+            addLog('Rewind: seeking to ' + seekTo.toFixed(1) + 's (current: ' + currentTimeSec.toFixed(1) + 's)');
+        });
 });
+
+function switchToLiveFeed() {
+    const live = document.getElementById('liveFeed');
+    const rewind = document.getElementById('rewindFeed');
+    rewind.pause();
+    rewind.style.display = 'none';
+    live.style.display = 'block';
+}
 
 // --- Keyboard shortcuts for testing scores ---
 // Press 's' to add point to serving team, 'r' for receiving, 'n' to switch server

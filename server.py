@@ -13,7 +13,10 @@ score_state = {
     "receiving": 0,
     "server": 1,
     "status": "idle",   # idle | live | stopped
-    "log": []           # recent events
+    "log": [],          # recent events
+    "source": None,     # current video source path (None for webcam)
+    "frame_pos": 0,     # current frame index in the video
+    "fps": 30,          # fps of the current source
 }
 _lock = threading.Lock()
 _stop_event = None
@@ -82,6 +85,19 @@ def set_status(status):
         score_state["status"] = status
 
 
+def set_source(source):
+    """Store the current source path so dashboard can use it for rewind."""
+    with _lock:
+        score_state["source"] = source if source != 0 else None
+
+
+def set_frame_pos(frame_pos, fps):
+    """Called by capture_thread to report current playback position."""
+    with _lock:
+        score_state["frame_pos"] = frame_pos
+        score_state["fps"] = fps
+
+
 # --- Routes ---
 
 @app.route('/')
@@ -139,6 +155,12 @@ def stop():
         _stop_event.set()
     set_status("stopped")
     return jsonify({"status": "stopped"})
+
+
+@app.route('/styles/<path:filename>')
+def styles(filename):
+    mime = 'video/mp4' if filename.endswith('.mp4') else None
+    return send_from_directory('styles', filename, mimetype=mime)
 
 
 @app.route('/css/<path:filename>')
