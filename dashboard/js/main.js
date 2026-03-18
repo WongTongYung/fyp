@@ -35,19 +35,42 @@ function addLog(message) {
 // --- Controls ---
 document.getElementById('startBtn').addEventListener('click', function () {
     if (isRunning) return;
-    isRunning = true;
-    document.getElementById('status').textContent = '(Status: Live)';
-    document.getElementById('status').classList.add('live');
-    addLog('System started.');
+    const statusText = document.getElementById('status').textContent;
+    const isPaused = statusText.includes('Paused');
+
+    if (isPaused) {
+        // Resume paused pipeline
+        fetch('/resume', { method: 'POST' })
+            .then(r => r.json())
+            .then(() => addLog('Resumed.'))
+            .catch(err => addLog('Resume failed: ' + err));
+    } else {
+        // Fresh start
+        let source = document.getElementById('sourceInput').value.trim();
+        if (source === '' || source === '0') source = 0;
+        fetch('/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ source: source })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'started') {
+                addLog('System starting with source: ' + (source === 0 ? 'webcam' : source));
+            } else {
+                addLog('Start failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(err => addLog('Start failed: ' + err));
+    }
 });
 
 document.getElementById('stopBtn').addEventListener('click', function () {
     if (!isRunning) return;
-    fetch('/stop', { method: 'POST' });
-    isRunning = false;
-    document.getElementById('status').textContent = '(Status: Stopped)';
-    document.getElementById('status').classList.remove('live');
-    addLog('System stopped.');
+    fetch('/pause', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => addLog('Camera paused.'))
+        .catch(err => addLog('Pause failed: ' + err));
 });
 
 document.getElementById('rewindBtn').addEventListener('click', function () {
@@ -92,6 +115,10 @@ function pollScore() {
                 isRunning = true;
                 statusEl.textContent = '(Status: Live)';
                 statusEl.classList.add('live');
+            } else if (data.status === 'paused') {
+                isRunning = false;
+                statusEl.textContent = '(Status: Paused)';
+                statusEl.classList.remove('live');
             } else if (data.status === 'stopped') {
                 isRunning = false;
                 statusEl.textContent = '(Status: Stopped)';

@@ -1,6 +1,7 @@
 import queue
 from database import log_event, log_score
 from server import update_score, add_log
+from calibration import is_in_court
 
 
 # --- Pickleball scoring rules ---
@@ -10,8 +11,9 @@ from server import update_score, add_log
 
 
 class GameState:
-    def __init__(self, match_id):
+    def __init__(self, match_id, court_container):
         self.match_id = match_id
+        self.court_container = court_container
 
         # Scores
         self.server_score = 0
@@ -24,6 +26,12 @@ class GameState:
         self.prev_direction_y = None   # 'up' or 'down' — used to detect bounce
         self.frames_missing = 0        # consecutive frames with no ball detected
         self.bounce_cooldown = 0       # prevent double-counting a bounce
+
+    def _get_court(self):
+        if self.court_container is None:
+            return None
+        with self.court_container["lock"]:
+            return self.court_container["poly"]
 
     def _push(self, event_type, cx=None, cy=None, conf=None, notes=None):
         """Log to DB and push to dashboard."""
@@ -70,8 +78,14 @@ class GameState:
             if (self.prev_direction_y == 'down'
                     and direction == 'up'
                     and self.bounce_cooldown == 0):
+                court_poly = self._get_court()
+                if court_poly is not None:
+                    in_court = is_in_court(cx, cy, court_poly)
+                    result = "IN" if in_court else "OUT"
+                else:
+                    result = "unknown"
                 self._push("bounce", cx=cx, cy=cy, conf=conf,
-                           notes=f"Bounce at ({cx:.0f}, {cy:.0f})")
+                           notes=f"Bounce {result} at ({cx:.0f}, {cy:.0f})")
                 self.bounce_cooldown = 10   # skip next 10 frames before counting again
 
             self.prev_direction_y = direction
@@ -87,13 +101,13 @@ class GameState:
         self.frames_missing += 1
 
 
-def game_logic_thread(coord_queue, stop_event, match_id):
+def game_logic_thread(coord_queue, stop_event, match_id, court_container):
     """
     T4 — reads ball coordinates from coord_queue,
     runs game state logic, updates scoreboard and DB.
     """
     print("Starting game logic thread...")
-    state = GameState(match_id)
+    state = GameState(match_id, court_container)
 
     while not stop_event.is_set():
         try:

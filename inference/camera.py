@@ -1,6 +1,7 @@
 import cv2
 import queue
 import time
+import numpy as np
 from server import push_frame
 
 # --- 1. Define Your Processing Function ---
@@ -18,17 +19,38 @@ def processing_function(frame):
 
 # --- 2. Define Thread Functions ---
 
-def capture_thread(cap, save_queue, process_queue, stop_event, fps=0):
+def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queue=None, static_frame=None, pause_event=None):
     """
     Thread function to read frames from the camera.
-    This corresponds to the "Camera" block.
     fps: if > 0, sleep between frames to match video speed (for file sources).
          Leave as 0 for webcam — hardware already limits the rate.
+    static_frame: if set, loop this single image instead of reading from cap.
+    pause_event: when set, the thread idles without reading new frames.
     """
     print("Starting capture thread...")
-    frame_delay = 1.0 / fps if fps > 0 else 0
+    frame_delay = 1.0 / fps if fps > 0 else 1.0 / 30
 
+    if static_frame is not None:
+        while not stop_event.is_set():
+            if pause_event and pause_event.is_set():
+                time.sleep(0.1)
+                continue
+            if not save_queue.full():
+                save_queue.put(static_frame.copy())
+            if not process_queue.full():
+                process_queue.put(static_frame.copy())
+            if calib_queue is not None and not calib_queue.full():
+                calib_queue.put_nowait(static_frame.copy())
+            time.sleep(frame_delay)
+        print("Capture thread stopped.")
+        return
+
+    frame_delay = 1.0 / fps if fps > 0 else 0
     while not stop_event.is_set():
+        if pause_event and pause_event.is_set():
+            time.sleep(0.1)
+            continue
+
         ret, frame = cap.read()
         if not ret:
             print("Failed to grab frame, stopping.")
@@ -40,6 +62,9 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0):
 
         if not process_queue.full():
             process_queue.put(frame.copy())
+
+        if calib_queue is not None and not calib_queue.full():
+            calib_queue.put_nowait(frame.copy())
 
         if frame_delay:
             time.sleep(frame_delay)
@@ -64,13 +89,13 @@ def save_thread(out, save_queue, stop_event):
             
     print("Save thread stopped.")
 
-def processing_thread(process_queue, stop_event, model, coord_queue):
+def processing_thread(process_queue, stop_event, model, coord_queue, court_container=None):
     while not stop_event.is_set():
         if not process_queue.empty():
             frame = process_queue.get()
             
             # Run YOLO inference
-            results = model.predict(frame, conf=0.3, verbose=False)
+            results = model.predict(frame, conf=0.3, verbose=False, imgsz=640)
             
             # Extract ball coordinates
             for result in results:
@@ -90,6 +115,12 @@ def processing_thread(process_queue, stop_event, model, coord_queue):
                 # Draw detections on frame
                 annotated = result.plot()
 
-            push_frame(annotated if results[0].boxes else frame)
+            out = annotated if results[0].boxes else frame
+            if court_container is not None:
+                with court_container["lock"]:
+                    poly = court_container["poly"]
+                if poly is not None:
+                    cv2.polylines(out, [poly.astype(np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
+            push_frame(out)
             
     print("Processing thread stopped.")

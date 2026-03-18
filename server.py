@@ -1,6 +1,9 @@
-from flask import Flask, jsonify, render_template, send_from_directory, Response
+from flask import Flask, jsonify, render_template, send_from_directory, Response, request
 import threading
 import cv2
+import logging
+
+logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
 
@@ -14,12 +17,24 @@ score_state = {
 }
 _lock = threading.Lock()
 _stop_event = None
+_pause_event = None
+_start_callback = None
+_pipeline_thread = None
 
 
 def set_stop_event(event):
-    """Pass main's stop_event so the /stop route can trigger shutdown."""
     global _stop_event
     _stop_event = event
+
+
+def set_pause_event(event):
+    global _pause_event
+    _pause_event = event
+
+
+def set_start_callback(cb):
+    global _start_callback
+    _start_callback = cb
 
 
 # Shared latest frame for MJPEG streaming
@@ -86,8 +101,40 @@ def video_feed():
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+@app.route('/start', methods=['POST'])
+def start():
+    global _pipeline_thread
+    if _pipeline_thread and _pipeline_thread.is_alive():
+        return jsonify({"error": "Already running"}), 409
+    data = request.get_json(force=True, silent=True) or {}
+    source = data.get("source", 0)
+    if _start_callback:
+        _pipeline_thread = threading.Thread(target=_start_callback, args=(source,), daemon=True)
+        _pipeline_thread.start()
+        return jsonify({"status": "started"})
+    return jsonify({"error": "No pipeline registered"}), 500
+
+
+@app.route('/pause', methods=['POST'])
+def pause():
+    if _pause_event:
+        _pause_event.set()
+    set_status("paused")
+    return jsonify({"status": "paused"})
+
+
+@app.route('/resume', methods=['POST'])
+def resume():
+    if _pause_event:
+        _pause_event.clear()
+    set_status("live")
+    return jsonify({"status": "live"})
+
+
 @app.route('/stop', methods=['POST'])
 def stop():
+    if _pause_event:
+        _pause_event.clear()  # clear pause before stopping threads
     if _stop_event:
         _stop_event.set()
     set_status("stopped")

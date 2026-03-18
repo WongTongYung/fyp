@@ -182,3 +182,24 @@ body {
 .btn-stop:hover {
     background-color: #ffcdd2;
 }
+
+.source-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.source-input label {
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.source-input input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 2px solid #333;
+    font-family: monospace;
+}
