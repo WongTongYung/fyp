@@ -19,7 +19,7 @@ torch.set_num_threads(2)
 torch.backends.cudnn.benchmark = True
 
 model = YOLO("models/yolo11m-custom.pt")
-model = YOLO("models/yolo11n.pt")
+#model = YOLO("models/yolo11n.pt")
 model.to("cuda")
 
 
@@ -90,6 +90,9 @@ def run_pipeline(source):
             print("Error: Could not open video source.")
             add_log("Error: Could not open video source.")
             return
+        # Request 1080p — camera will use closest supported resolution
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -122,8 +125,12 @@ def run_pipeline(source):
         if is_file:
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
-    # Court calibration
-    court_poly = get_court(first_frame)
+    # Court calibration — pass cap so manual mode can navigate ±30 frames
+    calib_cap   = cap if is_file else None
+    court_poly  = get_court(first_frame, cap=calib_cap, start_pos=0)
+    # Ensure cap is back at frame 0 for the capture thread
+    if is_file and cap is not None:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     court_container = {"poly": court_poly, "lock": threading.Lock()}
     if court_poly is None:
         print("[Calibration] No court set — will retry automatically from live frames")
@@ -146,7 +153,14 @@ def run_pipeline(source):
     t3.start()
     t4.start()
 
-    # --- Wait for Threads to Finish ---
+    # buffer the frame for 500ms so can exit gracefully
+    try:
+        while t1.is_alive() or t3.is_alive():
+            t1.join(timeout=0.5)
+    except KeyboardInterrupt:
+        print("\nCtrl+C received, stopping...")
+        stop_event.set()
+        
     t1.join()
     t2.join()
     t3.join()

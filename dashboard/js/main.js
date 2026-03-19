@@ -15,6 +15,7 @@ let servingScore = 0;
 let receivingScore = 0;
 let serverNumber = 1;
 let isRunning = false;
+let _serverLogCount = 0;  // tracks how many server-side log entries we've shown
 
 function updateScoreboard() {
     document.getElementById('servingScore').textContent = String(servingScore).padStart(2, '0');
@@ -56,6 +57,7 @@ document.getElementById('startBtn').addEventListener('click', function () {
         .then(r => r.json())
         .then(data => {
             if (data.status === 'started') {
+                isRunning = true;
                 switchToLiveFeed();
                 addLog('System starting with source: ' + (source === 0 ? 'webcam' : source));
             } else {
@@ -162,10 +164,11 @@ function pollScore() {
                 statusEl.classList.remove('live');
             }
 
-            // Append new log entries
-            const logBox = document.getElementById('logBox');
-            const currentCount = logBox.children.length;
-            data.log.slice(currentCount).forEach(msg => addLog(msg));
+            // Append new server-side log entries (tracked separately from JS-only addLog calls)
+            data.log.slice(_serverLogCount).forEach(msg => {
+                addLog(msg);
+                _serverLogCount++;
+            });
         })
         .catch(() => {}); // silently ignore if server not running
 }
@@ -226,8 +229,9 @@ function drawOverlay(data) {
         ctx.fillStyle = '#00ff00';
         ctx.fill();
 
-        // Confidence label
-        const label = (det.conf * 100).toFixed(0) + '%';
+        // Label: track ID + confidence
+        const idStr = det.id !== undefined ? '#' + det.id + ' ' : '';
+        const label = idStr + (det.conf * 100).toFixed(0) + '%';
         ctx.font = 'bold 13px monospace';
         const tw = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';

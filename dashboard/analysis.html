@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Match Analysis — Pickleball</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .nav-bar { display:flex; align-items:center; gap:12px; margin-bottom:15px; }
+        .nav-link { font-size:14px; text-decoration:none; color:#333; border:2px solid #333; padding:4px 14px; font-weight:bold; }
+        .nav-link:hover { background:#e0e0e0; }
+        .match-title { font-size:20px; font-weight:bold; }
+
+        .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:15px; }
+        .stat-card { background:#fff; border:2px solid #333; padding:14px 10px; text-align:center; }
+        .stat-value { display:block; font-size:38px; font-weight:bold; line-height:1.1; }
+        .stat-label { font-size:12px; color:#666; margin-top:4px; display:block; }
+
+        .main-grid { display:grid; grid-template-columns:1fr 1fr; gap:15px; }
+        .panel { border:2px solid #333; background:#fff; padding:12px; }
+        .panel h3 { font-size:15px; font-weight:bold; margin-bottom:10px; }
+
+        #courtCanvas { display:block; width:100%; }
+        .chart-wrap { position:relative; height:340px; }
+        .legend { display:flex; gap:16px; font-size:12px; margin-top:6px; }
+        .legend span { display:inline-flex; align-items:center; gap:5px; }
+        .dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+        .empty-msg { color:#999; font-size:14px; text-align:center; padding:40px 0; }
+    </style>
+</head>
+<body>
+
+<header class="header">
+    <h1>PICKLEBALL POINT COUNTING SYSTEM</h1>
+    <span id="clock" class="clock"></span>
+</header>
+
+<div style="padding:0 5px;">
+
+    <div class="nav-bar">
+        <a href="/" class="nav-link">← Dashboard</a>
+        <a href="/matches" class="nav-link">All Matches</a>
+        <span class="match-title">Match Analysis &nbsp;#<span id="matchId"></span></span>
+        <span id="matchDate" style="font-size:13px;color:#666;margin-left:auto;"></span>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="stat-row">
+        <div class="stat-card">
+            <span class="stat-value" id="statDuration">—</span>
+            <span class="stat-label">Duration</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" id="statPoints">—</span>
+            <span class="stat-label">Total Points</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" id="statBounces">—</span>
+            <span class="stat-label">Bounces Tracked</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-value" id="statSideOuts">—</span>
+            <span class="stat-label">Side Outs</span>
+        </div>
+    </div>
+
+    <!-- Bounce Map + Score Chart -->
+    <div class="main-grid">
+
+        <div class="panel">
+            <h3>Bounce Map</h3>
+            <canvas id="courtCanvas" height="320"></canvas>
+            <div class="legend">
+                <span><span class="dot" style="background:#ffeb3b;border:1px solid #999;"></span> IN</span>
+                <span><span class="dot" style="background:#ef5350;border:1px solid #999;"></span> OUT</span>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Score Timeline</h3>
+            <div class="chart-wrap">
+                <canvas id="scoreChart"></canvas>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const MATCH_ID = {{ match_id }};
+
+// Clock
+function updateClock() {
+    const now = new Date();
+    let h = now.getHours(), m = String(now.getMinutes()).padStart(2,'0');
+    const ap = h >= 12 ? 'pm' : 'am';
+    h = h % 12 || 12;
+    document.getElementById('clock').textContent = h + ':' + m + ap;
+}
+updateClock(); setInterval(updateClock, 1000);
+
+document.getElementById('matchId').textContent = MATCH_ID;
+
+function fmtDuration(seconds) {
+    if (!seconds || seconds <= 0) return '—';
+    return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
+}
+
+// --- Court bounce map ---
+function drawCourtMap(courtPoly, bounces) {
+    const canvas = document.getElementById('courtCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.offsetWidth || 500;
+    canvas.width = W;
+
+    // Infer frame bounds from court corners (corners stay near the edges)
+    const frameW = Math.max(...courtPoly.map(p => p[0])) * 1.06;
+    const frameH = Math.max(...courtPoly.map(p => p[1])) * 1.10;
+    const H = Math.round(W * frameH / frameW);
+    canvas.height = H;
+
+    const sx = x => x / frameW * W;
+    const sy = y => y / frameH * H;
+
+    // Background
+    ctx.fillStyle = '#2e7d32';
+    ctx.fillRect(0, 0, W, H);
+
+    // Court surface fill
+    ctx.beginPath();
+    ctx.moveTo(sx(courtPoly[0][0]), sy(courtPoly[0][1]));
+    for (let i = 1; i < courtPoly.length; i++)
+        ctx.lineTo(sx(courtPoly[i][0]), sy(courtPoly[i][1]));
+    ctx.closePath();
+    ctx.fillStyle = '#388e3c';
+    ctx.fill();
+
+    // Court outline
+    ctx.beginPath();
+    ctx.moveTo(sx(courtPoly[0][0]), sy(courtPoly[0][1]));
+    for (let i = 1; i < courtPoly.length; i++)
+        ctx.lineTo(sx(courtPoly[i][0]), sy(courtPoly[i][1]));
+    ctx.closePath();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    if (!bounces.length) {
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('No bounces recorded', W / 2, H / 2);
+        return;
+    }
+
+    // Bounce dots
+    bounces.forEach(b => {
+        if (b.cx == null || b.cy == null) return;
+        const isOut = b.notes && b.notes.includes('OUT');
+        ctx.beginPath();
+        ctx.arc(sx(b.cx), sy(b.cy), 5, 0, Math.PI * 2);
+        ctx.fillStyle = isOut ? '#ef5350' : '#ffeb3b';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+    });
+}
+
+// --- Score timeline chart ---
+function buildScoreChart(scores, matchStart) {
+    const startMs = new Date(matchStart).getTime();
+
+    const serverPts = scores.map(s => ({
+        x: (new Date(s.timestamp).getTime() - startMs) / 1000,
+        y: s.server_score
+    }));
+    const receiverPts = scores.map(s => ({
+        x: (new Date(s.timestamp).getTime() - startMs) / 1000,
+        y: s.receiver_score
+    }));
+
+    new Chart(document.getElementById('scoreChart'), {
+        type: 'line',
+        data: {
+            datasets: [
+                {
+                    label: 'Server',
+                    data: serverPts,
+                    borderColor: '#1565c0',
+                    backgroundColor: 'rgba(21,101,192,0.08)',
+                    stepped: true,
+                    pointRadius: 4,
+                    tension: 0
+                },
+                {
+                    label: 'Receiver',
+                    data: receiverPts,
+                    borderColor: '#c62828',
+                    backgroundColor: 'rgba(198,40,40,0.08)',
+                    stepped: true,
+                    pointRadius: 4,
+                    tension: 0
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'linear',
+                    title: { display: true, text: 'Elapsed (seconds)' }
+                },
+                y: {
+                    beginAtZero: true,
+                    ticks: { stepSize: 1 },
+                    title: { display: true, text: 'Score' }
+                }
+            },
+            plugins: {
+                legend: { position: 'top' }
+            }
+        }
+    });
+}
+
+// --- Fetch & render ---
+fetch('/api/analysis/' + MATCH_ID)
+    .then(r => r.json())
+    .then(data => {
+        const { match, stats, bounces, scores, court_poly } = data;
+
+        // Header date
+        if (match.started_at)
+            document.getElementById('matchDate').textContent = match.started_at.slice(0, 16).replace('T', '  ');
+
+        // Stats
+        let duration = null;
+        if (match.started_at && match.ended_at)
+            duration = (new Date(match.ended_at) - new Date(match.started_at)) / 1000;
+        document.getElementById('statDuration').textContent  = fmtDuration(duration);
+        document.getElementById('statPoints').textContent    = stats.total_points   ?? 0;
+        document.getElementById('statBounces').textContent   = stats.total_bounces  ?? 0;
+        document.getElementById('statSideOuts').textContent  = stats.total_side_outs ?? 0;
+
+        // Court map
+        if (court_poly && court_poly.length >= 3)
+            drawCourtMap(court_poly, bounces);
+
+        // Score timeline
+        if (scores.length)
+            buildScoreChart(scores, match.started_at);
+        else {
+            document.querySelector('.chart-wrap').innerHTML =
+                '<p class="empty-msg">No score events recorded yet.</p>';
+        }
+    })
+    .catch(() => {
+        document.querySelector('.main-grid').innerHTML =
+            '<p class="empty-msg" style="grid-column:1/-1">Failed to load analysis data.</p>';
+    });
+</script>
+</body>
+</html>

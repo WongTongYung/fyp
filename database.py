@@ -10,6 +10,9 @@ _lock = threading.Lock()
 def init_db():
     """Create tables if they don't exist."""
     with sqlite3.connect(DB_PATH) as conn:
+        # WAL mode allows reads and writes to happen concurrently —
+        # prevents the /matches page from blocking while game_logic writes at 25fps
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("""
             CREATE TABLE IF NOT EXISTS matches (
                 id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,6 +107,56 @@ def get_match_events(match_id):
         conn.row_factory = sqlite3.Row
         cur = conn.execute(
             "SELECT * FROM events WHERE match_id = ? ORDER BY timestamp",
+            (match_id,)
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_all_matches():
+    """Return all matches ordered newest first."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute("SELECT * FROM matches ORDER BY id DESC")
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_match_summary(match_id):
+    """Return match row plus aggregated event counts."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        match = conn.execute(
+            "SELECT * FROM matches WHERE id = ?", (match_id,)
+        ).fetchone()
+        stats = conn.execute(
+            """SELECT
+                COUNT(CASE WHEN event_type='bounce'       THEN 1 END) AS total_bounces,
+                COUNT(CASE WHEN event_type='point_server' THEN 1 END) AS total_points,
+                COUNT(CASE WHEN event_type='side_out'     THEN 1 END) AS total_side_outs
+               FROM events WHERE match_id = ?""",
+            (match_id,)
+        ).fetchone()
+        return {"match": dict(match) if match else {}, "stats": dict(stats) if stats else {}}
+
+
+def get_match_bounces(match_id):
+    """Return all bounce events with position data."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(
+            """SELECT timestamp, cx, cy, notes FROM events
+               WHERE match_id = ? AND event_type = 'bounce'
+               ORDER BY timestamp""",
+            (match_id,)
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def get_match_scores(match_id):
+    """Return all score snapshots for the timeline chart."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(
+            "SELECT * FROM scores WHERE match_id = ? ORDER BY timestamp",
             (match_id,)
         )
         return [dict(row) for row in cur.fetchall()]

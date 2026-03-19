@@ -212,6 +212,79 @@ def stop():
     return jsonify({"status": "stopped"})
 
 
+@app.route('/matches')
+def matches_list():
+    from database import get_all_matches
+    from datetime import datetime
+    matches = get_all_matches()
+    rows = ""
+    for m in matches:
+        duration = "—"
+        if m.get("started_at") and m.get("ended_at"):
+            try:
+                s = datetime.fromisoformat(m["started_at"])
+                e = datetime.fromisoformat(m["ended_at"])
+                secs = int((e - s).total_seconds())
+                duration = f"{secs // 60}m {secs % 60}s"
+            except Exception:
+                pass
+        rows += (
+            f'<tr><td>#{m["id"]}</td>'
+            f'<td>{m["started_at"][:19]}</td>'
+            f'<td>{duration}</td>'
+            f'<td><a href="/analysis/{m["id"]}">View Analysis</a></td></tr>'
+        )
+    html = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Match History</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  table{{width:100%;border-collapse:collapse;margin-top:15px;}}
+  th,td{{padding:10px 14px;border:1px solid #333;text-align:left;}}
+  th{{background:#f5f5f5;font-weight:bold;}}
+  a{{color:#1565c0;text-decoration:none;}}
+  a:hover{{text-decoration:underline;}}
+  .back{{font-size:14px;border:2px solid #333;padding:4px 12px;color:#333;}}
+</style></head>
+<body>
+<header class="header"><h1>PICKLEBALL POINT COUNTING SYSTEM</h1></header>
+<div style="padding:10px 20px;">
+  <a href="/" class="back">← Dashboard</a>
+  <h2 style="margin:15px 0;font-size:20px;font-weight:bold;">Match History</h2>
+  <table>
+    <thead><tr><th>Match</th><th>Started</th><th>Duration</th><th>Analysis</th></tr></thead>
+    <tbody>{rows if rows else '<tr><td colspan="4" style="text-align:center;color:#999;">No matches recorded yet.</td></tr>'}</tbody>
+  </table>
+</div></body></html>"""
+    return html
+
+
+@app.route('/analysis/<int:match_id>')
+def analysis_page(match_id):
+    return render_template('analysis.html', match_id=match_id)
+
+
+@app.route('/api/analysis/<int:match_id>')
+def analysis_data(match_id):
+    import json as _json
+    from database import get_match_summary, get_match_bounces, get_match_scores
+    summary = get_match_summary(match_id)
+    bounces = get_match_bounces(match_id)
+    scores = get_match_scores(match_id)
+    court_poly = None
+    try:
+        with open('court.json') as f:
+            court_poly = _json.load(f)
+    except Exception:
+        pass
+    return jsonify({
+        "match": summary["match"],
+        "stats": summary["stats"],
+        "bounces": bounces,
+        "scores": scores,
+        "court_poly": court_poly,
+    })
+
+
 @app.route('/styles/<path:filename>')
 def styles(filename):
     mime = 'video/mp4' if filename.endswith('.mp4') else None

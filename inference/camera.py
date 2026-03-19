@@ -95,9 +95,11 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
     Extracts detection coordinates and pushes them via SSE (push_detections)
     instead of drawing on the frame — the browser canvas handles the overlay.
     """
+    print("Starting processing thread...")
     fps_counter = 0
     fps_display = 0.0
     fps_timer = time.time()
+    _use_track = True   # flips to False if lap is not installed
 
     while not stop_event.is_set():
         try:
@@ -107,21 +109,42 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
 
         frame_h, frame_w = frame.shape[:2]
 
-        # Run YOLO inference
-        results = model.predict(frame, conf=0.5, verbose=False, imgsz=640, device="cuda", half=True)
+        # Run YOLO — prefer track() for ByteTrack; fall back to predict() if lap missing
+        try:
+            if _use_track:
+                results = model.track(frame, conf=0.3, verbose=False, imgsz=640,
+                                      device="cuda", half=True, persist=True,
+                                      tracker="bytetrack.yaml")
+            else:
+                results = model.predict(frame, conf=0.3, verbose=False, imgsz=640,
+                                        device="cuda", half=True)
+        except Exception as e:
+            if _use_track and "lap" in str(e).lower():
+                print("[Processing] lap not installed — falling back to predict(). "
+                      "Run: pip install lapx  to enable ByteTrack.")
+                _use_track = False
+            continue
 
         # Extract detections as JSON-serializable dicts
         detections = []
         for result in results:
+            if result.boxes is None or len(result.boxes) == 0:
+                continue
             for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().tolist()
                 conf = box.conf[0].item()
                 cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
 
-                detections.append({
+                det = {
                     "x1": x1, "y1": y1, "x2": x2, "y2": y2,
                     "cx": cx, "cy": cy, "conf": conf,
-                })
+                }
+
+                # Track ID (assigned by ByteTrack, persists across frames)
+                if box.id is not None:
+                    det["id"] = int(box.id[0].item())
+
+                detections.append(det)
 
                 if not coord_queue.full():
                     coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": conf})

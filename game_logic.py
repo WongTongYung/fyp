@@ -74,18 +74,22 @@ class GameState:
             dy = cy - self.prev_cy          # positive = moving down, negative = moving up
             direction = 'down' if dy > 0 else 'up'
 
-            # Bounce: ball was going down and is now going up
+            # Bounce: ball was going down and is now going up.
+            # Use prev_cx/prev_cy (last frame still going down) as the bounce
+            # position — it is closer to the actual ground contact point than
+            # the current frame where the ball has already started rising.
             if (self.prev_direction_y == 'down'
                     and direction == 'up'
                     and self.bounce_cooldown == 0):
+                bx, by = self.prev_cx, self.prev_cy
                 court_poly = self._get_court()
                 if court_poly is not None:
-                    in_court = is_in_court(cx, cy, court_poly)
+                    in_court = is_in_court(bx, by, court_poly)
                     result = "IN" if in_court else "OUT"
                 else:
                     result = "unknown"
-                self._push("bounce", cx=cx, cy=cy, conf=conf,
-                           notes=f"Bounce {result} at ({cx:.0f}, {cy:.0f})")
+                self._push("bounce", cx=bx, cy=by, conf=conf,
+                           notes=f"Bounce {result} at ({bx:.0f}, {by:.0f})")
                 self.bounce_cooldown = 10   # skip next 10 frames before counting again
 
             self.prev_direction_y = direction

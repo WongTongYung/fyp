@@ -172,21 +172,29 @@ def _click_event(event, x, y, flags, param):
 
 
 MAX_DISPLAY_W, MAX_DISPLAY_H = 1280, 720
+SEC_NAV_RANGE = 30   # ±seconds the user can navigate during manual calibration
 
 
-def calibrate_court(frame):
+def calibrate_court(frame, cap=None, start_pos=0, fps=30):
     """
     Manual fallback: user clicks 4 court corners.
     Order: top-left → top-right → bottom-right → bottom-left
     Display is scaled to fit the screen; clicks are mapped back to original resolution.
+
+    If cap is provided (video file), A/D keys let the user step
+    ±SEC_NAV_RANGE seconds around start_pos to find a cleaner frame.
+    Navigating to a new frame resets any clicked points.
     """
     global _points
     _points = []
 
+    fps = max(1, fps)
+    current_sec = 0   # offset in seconds from start_pos
+    current_frame = frame
+
     h, w = frame.shape[:2]
     scale = min(MAX_DISPLAY_W / w, MAX_DISPLAY_H / h, 1.0)
     disp_w, disp_h = int(w * scale), int(h * scale)
-    display = cv2.resize(frame, (disp_w, disp_h))
 
     window = "Manual Calibration - click 4 corners, then press ENTER"
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
@@ -195,10 +203,14 @@ def calibrate_court(frame):
 
     print("\n[Calibration] Manual mode.")
     print("  Click: 1=Top-left  2=Top-right  3=Bottom-right  4=Bottom-left")
+    if cap is not None:
+        print(f"  A/D keys to navigate +-{SEC_NAV_RANGE}s (resets points)")
     print("  ENTER to confirm | R to reset\n")
 
     while True:
+        display = cv2.resize(current_frame, (disp_w, disp_h))
         preview = display.copy()
+
         for i, (ox, oy) in enumerate(_points):
             pt = (int(ox * scale), int(oy * scale))
             cv2.circle(preview, pt, 6, (0, 255, 0), -1)
@@ -210,18 +222,46 @@ def calibrate_court(frame):
                           [np.array(scaled_pts, dtype=np.int32)],
                           isClosed=True, color=(0, 255, 0), thickness=2)
 
-        cv2.putText(preview, "Click 4 corners | ENTER=confirm  R=reset",
+        nav_hint = f"  A/D=sec({current_sec:+d}/{SEC_NAV_RANGE})  " if cap is not None else "  "
+        cv2.putText(preview,
+                    f"Click 4 corners |{nav_hint}ENTER=confirm  R=reset",
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         cv2.imshow(window, preview)
+
         key = cv2.waitKey(1) & 0xFF
 
-        if key == 13 and len(_points) == 4:
+        if key == 13 and len(_points) == 4:   # ENTER
             break
+
         if key == ord('r'):
             _points = []
             print("  Reset.")
+            continue
+
+        # Second-based navigation (only when cap is available)
+        if cap is not None:
+            new_sec = None
+            if key == ord('a') and current_sec > -SEC_NAV_RANGE:
+                new_sec = current_sec - 1
+            elif key == ord('d') and current_sec < SEC_NAV_RANGE:
+                new_sec = current_sec + 1
+
+            if new_sec is not None:
+                target = max(0, start_pos + new_sec * fps)
+                cap.set(cv2.CAP_PROP_POS_FRAMES, target)
+                ret, f = cap.read()
+                if ret:
+                    current_sec = new_sec
+                    current_frame = f
+                    _points = []   # reset clicks for new frame
+                    print(f"  Offset: {current_sec:+d}s  (frame {target})")
 
     cv2.destroyWindow(window)
+
+    # Restore cap to start_pos so the rest of the pipeline is unaffected
+    if cap is not None:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_pos)
+
     return np.array(_points, dtype=np.float32)
 
 
@@ -244,11 +284,14 @@ def load_court():
     return np.array(data, dtype=np.float32)
 
 
-def get_court(frame, mode="auto"):
+def get_court(frame, mode="manual", cap=None, start_pos=0, fps=30):
     """
     mode='auto'   — try automatic detection, confirm with user, fallback to manual
     mode='manual' — skip auto, go straight to manual click
     mode='load'   — load from file only, skip detection entirely
+
+    cap / start_pos / fps: optional video capture + frame index + fps so that
+    manual calibration can let the user navigate ±SEC_NAV_RANGE seconds.
 
     Always saves result to court.json.
     """
@@ -273,10 +316,10 @@ def get_court(frame, mode="auto"):
 
         if court is None:
             print("[Calibration] Auto-detection failed or rejected — switching to manual.")
-            court = calibrate_court(frame)
+            court = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
 
     elif mode == "manual":
-        court = calibrate_court(frame)
+        court = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
 
     _save(court)
     return court
