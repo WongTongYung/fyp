@@ -5,6 +5,7 @@ import sys
 import os
 import webbrowser
 import time
+import torch
 
 from inference.camera import capture_thread, save_thread, processing_thread
 from ultralytics import YOLO
@@ -13,7 +14,13 @@ from server import run_server, set_status, set_stop_event, set_pause_event, set_
 from game_logic import game_logic_thread
 from calibration import get_court, calibration_thread
 
+# Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
+torch.set_num_threads(2)
+torch.backends.cudnn.benchmark = True
+
 model = YOLO("models/yolo11m-custom.pt")
+model = YOLO("models/yolo11n.pt")
+model.to("cuda")
 
 
 def run_pipeline(source):
@@ -25,7 +32,7 @@ def run_pipeline(source):
 
     # Queues for threads
     save_queue = queue.Queue(maxsize=128)
-    process_queue = queue.Queue(maxsize=32)
+    process_queue = queue.Queue(maxsize=4)   # small: drop stale frames, keep real-time
     coord_queue = queue.Queue(maxsize=64)
 
     # Events to signal threads to stop or pause
@@ -51,14 +58,45 @@ def run_pipeline(source):
         frame_height, frame_width = static_frame.shape[:2]
         fps = 30
     else:
-        cap = cv2.VideoCapture(source)
-        if not cap.isOpened():
+        # Scan available cameras when using camera index
+        if isinstance(source, int):
+            print("[Camera] Scanning available cameras...")
+            for backend_name, backend in [("MSMF", cv2.CAP_MSMF), ("DSHOW", cv2.CAP_DSHOW)]:
+                for i in range(5):
+                    test_cap = cv2.VideoCapture(i, backend)
+                    if test_cap.isOpened():
+                        w = int(test_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        h = int(test_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        f = test_cap.get(cv2.CAP_PROP_FPS)
+                        print(f"  [Camera {i}] ({backend_name}) Available - {w}x{h} @ {f}fps")
+                        add_log(f"Camera {i} ({backend_name}): {w}x{h} @ {f}fps")
+                    else:
+                        print(f"  [Camera {i}] ({backend_name}) Not available")
+                    test_cap.release()
+
+        # Try multiple backends: MSMF (default Windows), then DSHOW, then auto
+        cap = None
+        if isinstance(source, int):
+            for backend_name, backend in [("MSMF", cv2.CAP_MSMF), ("DSHOW", cv2.CAP_DSHOW), ("AUTO", cv2.CAP_ANY)]:
+                cap = cv2.VideoCapture(source, backend)
+                if cap.isOpened():
+                    print(f"[Camera] Opened camera {source} with {backend_name}")
+                    add_log(f"Opened camera {source} with {backend_name}")
+                    break
+                cap.release()
+        else:
+            cap = cv2.VideoCapture(source)
+        if not cap or not cap.isOpened():
             print("Error: Could not open video source.")
             add_log("Error: Could not open video source.")
             return
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
+        if fps == 0:
+            fps = 30  # Default to 30fps if camera doesn't report fps
+            print(f"[Camera] FPS not reported, defaulting to {fps}")
+        print(f"[Camera] Resolution: {frame_width}x{frame_height}, FPS: {fps}")
 
     # Setup Video Writer
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
@@ -81,7 +119,8 @@ def run_pipeline(source):
             cap.release()
             out.release()
             return
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # reset to beginning
+        if is_file:
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # only seek back for video files, not live cameras
 
     # Court calibration
     court_poly = get_court(first_frame)
@@ -139,7 +178,11 @@ if __name__ == "__main__":
 
     # If source given via CLI, run pipeline directly
     if len(sys.argv) > 1:
-        run_pipeline(sys.argv[1])
+        src = sys.argv[1]
+        # Convert to int if it's a camera index
+        if src.isdigit():
+            src = int(src)
+        run_pipeline(src)
     else:
         # Wait for dashboard to trigger start
         print("Dashboard ready at http://127.0.0.1:5000 — use the Start button.")

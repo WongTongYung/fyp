@@ -43,22 +43,28 @@ def set_start_callback(cb):
 # Shared latest frame for MJPEG streaming
 _frame = None
 _frame_lock = threading.Lock()
+_frame_event = threading.Event()   # signals when a new frame is available
 
 
 def push_frame(frame):
     """Called by processing_thread to share the latest annotated frame."""
     global _frame
     with _frame_lock:
-        _frame = frame.copy()
+        _frame = frame
+    _frame_event.set()   # wake up the stream generator
 
 
 def _generate_frames():
     """Generator that yields JPEG frames for MJPEG stream."""
+    last_frame = None
     while True:
+        _frame_event.wait(timeout=1.0)   # sleep until a new frame arrives
+        _frame_event.clear()
         with _frame_lock:
             frame = _frame
-        if frame is None:
+        if frame is None or frame is last_frame:
             continue
+        last_frame = frame
         _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
