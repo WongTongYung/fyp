@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from database import init_db, start_match, end_match
 from server import run_server, set_status, set_stop_event, set_pause_event, set_start_callback, set_source, add_log
 from game_logic import game_logic_thread
-from calibration import get_court, calibration_thread
+from calibration import get_court
 
 # Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
 torch.set_num_threads(2)
@@ -24,7 +24,7 @@ model.to("cuda")
 
 
 def run_pipeline(source):
-    """Run the full processing pipeline for a given video/image source."""
+    """Full pipeline: capture → raw MJPEG + YOLO detections via SSE."""
     init_db()
     match_id = start_match()
     print(f"Match started (ID: {match_id})")
@@ -32,7 +32,7 @@ def run_pipeline(source):
 
     # Queues for threads
     save_queue = queue.Queue(maxsize=128)
-    process_queue = queue.Queue(maxsize=4)   # small: drop stale frames, keep real-time
+    process_queue = queue.Queue(maxsize=4)
     coord_queue = queue.Queue(maxsize=64)
 
     # Events to signal threads to stop or pause
@@ -94,7 +94,7 @@ def run_pipeline(source):
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         if fps == 0:
-            fps = 30  # Default to 30fps if camera doesn't report fps
+            fps = 30
             print(f"[Camera] FPS not reported, defaulting to {fps}")
         print(f"[Camera] Resolution: {frame_width}x{frame_height}, FPS: {fps}")
 
@@ -108,7 +108,7 @@ def run_pipeline(source):
             cap.release()
         return
 
-    # Grab first frame for calibration (skip interactive picker)
+    # Grab first frame for calibration
     if is_image:
         first_frame = static_frame.copy()
     else:
@@ -120,7 +120,7 @@ def run_pipeline(source):
             out.release()
             return
         if is_file:
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # only seek back for video files, not live cameras
+            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     # Court calibration
     court_poly = get_court(first_frame)
@@ -139,21 +139,18 @@ def run_pipeline(source):
     t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event))
     t3 = threading.Thread(target=processing_thread, args=(process_queue, stop_event, model, coord_queue, court_container))
     t4 = threading.Thread(target=game_logic_thread, args=(coord_queue, stop_event, match_id, court_container))
-    t5 = threading.Thread(target=calibration_thread, args=(calib_queue, court_container, stop_event))
 
     set_status("live")
     t1.start()
     t2.start()
     t3.start()
     t4.start()
-    #t5.start()
 
     # --- Wait for Threads to Finish ---
     t1.join()
     t2.join()
     t3.join()
     t4.join()
-    #t5.join()
 
     # --- Cleanup ---
     set_status("stopped")
@@ -167,24 +164,19 @@ def run_pipeline(source):
 
 
 if __name__ == "__main__":
-    # Register pipeline so dashboard /start route can trigger it
     set_start_callback(run_pipeline)
 
-    # Start Flask server
     flask_t = threading.Thread(target=run_server, daemon=True)
     flask_t.start()
     time.sleep(1)
     webbrowser.open("http://127.0.0.1:5000")
 
-    # If source given via CLI, run pipeline directly
     if len(sys.argv) > 1:
         src = sys.argv[1]
-        # Convert to int if it's a camera index
         if src.isdigit():
             src = int(src)
         run_pipeline(src)
     else:
-        # Wait for dashboard to trigger start
         print("Dashboard ready at http://127.0.0.1:5000 — use the Start button.")
         try:
             while True:

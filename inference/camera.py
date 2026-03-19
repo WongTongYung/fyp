@@ -1,31 +1,14 @@
-import cv2
 import queue
 import time
-import numpy as np
-from server import push_frame, set_frame_pos
+from server import push_frame, set_frame_pos, push_detections
 
-# --- 1. Define Your Processing Function ---
-# This function represents your "Video processing" and "Vision module"
-def processing_function(frame):
-    """
-    This is a placeholder for your actual vision logic.
-    e.g., object detection, coordinate extraction.
-    """
-    # Example: Convert to grayscale and apply a blur
-    processed_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    processed_frame = cv2.GaussianBlur(processed_frame, (7, 7), 0)
-    
-    return processed_frame
-
-# --- 2. Define Thread Functions ---
+# --- Thread Functions ---
 
 def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queue=None, static_frame=None, pause_event=None):
     """
-    Thread function to read frames from the camera.
-    fps: if > 0, sleep between frames to match video speed (for file sources).
-         Leave as 0 for webcam — hardware already limits the rate.
-    static_frame: if set, loop this single image instead of reading from cap.
-    pause_event: when set, the thread idles without reading new frames.
+    Reads frames from the camera and:
+      - pushes raw frames to the MJPEG stream (push_frame)
+      - queues frames for YOLO processing and video saving
     """
     print("Starting capture thread...")
     # Boost capture thread priority so iVCam gets served faster
@@ -41,6 +24,7 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
             if pause_event and pause_event.is_set():
                 time.sleep(0.1)
                 continue
+            push_frame(static_frame)
             if not save_queue.full():
                 save_queue.put(static_frame)
             if not process_queue.full():
@@ -76,6 +60,8 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
         if frame_count % 30 == 0:
             set_frame_pos(frame_count, report_fps)
 
+        push_frame(frame)  # raw frame → MJPEG stream
+
         if not save_queue.full():
             save_queue.put(frame)
 
@@ -91,24 +77,24 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
     print("Capture thread stopped.")
 
 def save_thread(out, save_queue, stop_event):
-    """
-    Thread function to save frames to a file.
-    This corresponds to "Video storage".
-    """
+    """Thread function to save frames to a file."""
     print("Starting save thread...")
     while not stop_event.is_set() or not save_queue.empty():
         try:
-            # Get a frame from the queue, wait 1 second if empty
-            frame = save_queue.get(timeout=1) 
+            frame = save_queue.get(timeout=1)
             out.write(frame)
         except queue.Empty:
             if stop_event.is_set():
-                break # Exit loop if stop is requested and queue is empty
-            continue # Continue waiting if not stopped
-            
+                break
+            continue
     print("Save thread stopped.")
 
 def processing_thread(process_queue, stop_event, model, coord_queue, court_container=None):
+    """
+    YOLO inference thread.
+    Extracts detection coordinates and pushes them via SSE (push_detections)
+    instead of drawing on the frame — the browser canvas handles the overlay.
+    """
     fps_counter = 0
     fps_display = 0.0
     fps_timer = time.time()
@@ -119,33 +105,34 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
         except queue.Empty:
             continue
 
-        # Run YOLO inference
-        t0 = time.time()
-        results = model.predict(frame, conf=0.5, verbose=False, imgsz=640, device="cuda", half=True)
-        t1 = time.time()
+        frame_h, frame_w = frame.shape[:2]
 
-        # Extract ball coordinates
+        # Run YOLO inference
+        results = model.predict(frame, conf=0.5, verbose=False, imgsz=640, device="cuda", half=True)
+
+        # Extract detections as JSON-serializable dicts
+        detections = []
         for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-                confidence = box.conf[0].item()
+            for box in result.boxes:
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().tolist()
+                conf = box.conf[0].item()
                 cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
 
+                detections.append({
+                    "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                    "cx": cx, "cy": cy, "conf": conf,
+                })
+
                 if not coord_queue.full():
-                    coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": confidence})
+                    coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": conf})
 
-            annotated = result.plot()
-
-        t2 = time.time()
-        out = annotated if results[0].boxes else frame
-        #print(f"[Timing] predict={1000*(t1-t0):.1f}ms  plot+rest={1000*(t2-t1):.1f}ms  total={1000*(t2-t0):.1f}ms")
-
+        # Court polygon (if available)
+        court_pts = None
         if court_container is not None:
             with court_container["lock"]:
                 poly = court_container["poly"]
             if poly is not None:
-                cv2.polylines(out, [poly.astype(np.int32)], isClosed=True, color=(0, 255, 0), thickness=2)
+                court_pts = poly.tolist()
 
         # FPS counter
         fps_counter += 1
@@ -154,9 +141,8 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
             fps_display = fps_counter / elapsed
             fps_counter = 0
             fps_timer = time.time()
-        cv2.putText(out, f"FPS: {fps_display:.1f}", (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
 
-        push_frame(out)
+        # Push coordinates to browser via SSE — no frame drawing needed
+        push_detections(detections, frame_w, frame_h, court_pts, fps_display)
 
     print("Processing thread stopped.")

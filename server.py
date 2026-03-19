@@ -1,5 +1,7 @@
 from flask import Flask, jsonify, render_template, send_from_directory, Response, request
 import threading
+import time
+import json
 import cv2
 import logging
 
@@ -44,11 +46,17 @@ def set_start_callback(cb):
 _frame = None
 _frame_lock = threading.Lock()
 _frame_event = threading.Event()   # signals when a new frame is available
+_STREAM_FPS = 30                   # cap: browsers decode MJPEG in CPU, 30fps is smooth at any window size
+_last_push_time = 0.0
 
 
 def push_frame(frame):
-    """Called by processing_thread to share the latest annotated frame."""
-    global _frame
+    """Called by capture/processing to share the latest frame. Rate-limited to _STREAM_FPS."""
+    global _frame, _last_push_time
+    now = time.time()
+    if now - _last_push_time < 1.0 / _STREAM_FPS:
+        return   # drop this frame — too soon since last stream update
+    _last_push_time = now
     with _frame_lock:
         _frame = frame
     _frame_event.set()   # wake up the stream generator
@@ -68,6 +76,40 @@ def _generate_frames():
         _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+
+
+# --- Detection overlay via SSE ---
+_det_data = None
+_det_lock = threading.Lock()
+_det_event = threading.Event()
+
+
+def push_detections(detections, frame_w, frame_h, court=None, det_fps=0):
+    """Push detection coordinates for browser canvas overlay via SSE."""
+    global _det_data
+    data = {"detections": detections, "frame_w": frame_w, "frame_h": frame_h, "fps": det_fps}
+    if court is not None:
+        data["court"] = court
+    with _det_lock:
+        _det_data = json.dumps(data)
+    _det_event.set()
+
+
+def _generate_detections():
+    """SSE generator that yields detection JSON as events."""
+    last_payload = None
+    while True:
+        _det_event.wait(timeout=2.0)
+        _det_event.clear()
+        with _det_lock:
+            payload = _det_data
+        if payload is None:
+            yield ': keepalive\n\n'
+            continue
+        if payload is last_payload:
+            continue
+        last_payload = payload
+        yield f'data: {payload}\n\n'
 
 
 def update_score(serving, receiving, server):
@@ -121,6 +163,13 @@ def score():
 def video_feed():
     return Response(_generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/detections')
+def detections_feed():
+    return Response(_generate_detections(),
+                    mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
 
 @app.route('/start', methods=['POST'])
