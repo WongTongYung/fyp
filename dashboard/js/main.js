@@ -14,8 +14,14 @@ setInterval(updateClock, 1000);
 let servingScore = 0;
 let receivingScore = 0;
 let serverNumber = 1;
+let serverSide = 'near';   // which physical side the serving team is on
 let isRunning = false;
 let _serverLogCount = 0;  // tracks how many server-side log entries we've shown
+
+// --- Setup state (read from UI before Start) ---
+let gameMode = 'doubles';
+let setupServerSide = 'near';
+let setupServerNum = 1;
 
 // --- Bounce overlay ---
 let lastBounce = null;          // { result: 'IN'|'OUT', time: ms }
@@ -25,6 +31,14 @@ function updateScoreboard() {
     document.getElementById('servingScore').textContent = String(servingScore).padStart(2, '0');
     document.getElementById('receivingScore').textContent = String(receivingScore).padStart(2, '0');
     document.getElementById('serverNumber').textContent = serverNumber;
+    document.getElementById('serverSide').textContent = serverSide;
+    // Dynamic team name labels
+    const nearName = (document.getElementById('teamNear') || {}).value || 'Team A';
+    const farName  = (document.getElementById('teamFar')  || {}).value || 'Team B';
+    const servingName  = serverSide === 'near' ? nearName : farName;
+    const receivingName = serverSide === 'near' ? farName  : nearName;
+    document.getElementById('servingLabel').textContent = servingName + ' (Serving)';
+    document.getElementById('receivingLabel').textContent = receivingName + ' (Receiving)';
 }
 
 // --- Log ---
@@ -36,6 +50,40 @@ function addLog(message) {
     logBox.appendChild(entry);
     logBox.scrollTop = logBox.scrollHeight;
 }
+
+// --- Setup toggles ---
+function initToggles() {
+    document.querySelectorAll('[data-mode]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            gameMode = btn.dataset.mode;
+            // Hide server # row in singles mode
+            document.getElementById('serverNumRow').style.display = gameMode === 'singles' ? 'none' : '';
+        });
+    });
+    document.querySelectorAll('[data-side]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('[data-side]').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            setupServerSide = btn.dataset.side;
+            serverSide = setupServerSide;
+            updateScoreboard();
+        });
+    });
+    document.querySelectorAll('[data-srv]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('[data-srv]').forEach(function (b) { b.classList.remove('active'); });
+            btn.classList.add('active');
+            setupServerNum = parseInt(btn.dataset.srv);
+        });
+    });
+}
+initToggles();
+
+// Update labels when team name inputs change
+document.getElementById('teamNear').addEventListener('input', updateScoreboard);
+document.getElementById('teamFar').addEventListener('input', updateScoreboard);
 
 // --- Controls ---
 document.getElementById('startBtn').addEventListener('click', function () {
@@ -56,12 +104,22 @@ document.getElementById('startBtn').addEventListener('click', function () {
         fetch('/start', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source: source })
+            body: JSON.stringify({
+                source: source,
+                server_side: setupServerSide,
+                server: setupServerNum,
+                mode: gameMode,
+                team_near: (document.getElementById('teamNear').value.trim()) || 'Team A',
+                team_far:  (document.getElementById('teamFar').value.trim())  || 'Team B',
+                serving:   parseInt(document.getElementById('startServing').value)  || 0,
+                receiving: parseInt(document.getElementById('startReceiving').value) || 0
+            })
         })
         .then(r => r.json())
         .then(data => {
             if (data.status === 'started') {
                 isRunning = true;
+                _serverLogCount = 0;
                 switchToLiveFeed();
                 addLog('System starting with source: ' + (source === 0 ? 'webcam' : source));
             } else {
@@ -154,6 +212,16 @@ document.addEventListener('keydown', function (e) {
         addLog(msg);
         postScore(msg);
     }
+    if (e.key === 'x') {
+        fetch('/swap_side', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                serverSide = data.server_side;
+                updateScoreboard();
+                addLog('Swapped server side to ' + serverSide);
+            })
+            .catch(() => {});
+    }
 });
 
 // --- Poll Flask /score every second ---
@@ -164,6 +232,7 @@ function pollScore() {
             servingScore   = data.serving;
             receivingScore = data.receiving;
             serverNumber   = data.server;
+            serverSide     = data.server_side || serverSide;
             updateScoreboard();
 
             // Sync status

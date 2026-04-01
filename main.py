@@ -127,11 +127,15 @@ def run_pipeline(source):
 
     # Court calibration — pass cap so manual mode can navigate ±30 frames
     calib_cap   = cap if is_file else None
-    court_poly  = get_court(first_frame, cap=calib_cap, start_pos=0)
+    court_result = get_court(first_frame, cap=calib_cap, start_pos=0)
     # Ensure cap is back at frame 0 for the capture thread
     if is_file and cap is not None:
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-    court_container = {"poly": court_poly, "lock": threading.Lock()}
+    if court_result is not None:
+        court_poly, net_line = court_result
+    else:
+        court_poly, net_line = None, None
+    court_container = {"poly": court_poly, "net": net_line, "lock": threading.Lock()}
     if court_poly is None:
         print("[Calibration] No court set — will retry automatically from live frames")
         add_log("No court set — will retry automatically")

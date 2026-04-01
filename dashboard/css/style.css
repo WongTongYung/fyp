@@ -218,3 +218,43 @@ body {
     border: 2px solid #333;
     font-family: monospace;
 }
+
+/* Setup rows */
+.setup-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.setup-row label {
+    font-weight: bold;
+    font-size: 14px;
+    white-space: nowrap;
+    min-width: 90px;
+}
+
+.setup-input {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 2px solid #333;
+}
+
+.setup-input-sm {
+    width: 60px;
+    padding: 6px 10px;
+    font-size: 14px;
+    border: 2px solid #333;
+    text-align: center;
+}
+
+.btn-toggle {
+    padding: 6px 16px;
+    font-size: 14px;
+}
+
+.btn-toggle.active {
+    background-color: #333;
+    color: #fff;
+}

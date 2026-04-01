@@ -14,6 +14,10 @@ score_state = {
     "serving": 0,
     "receiving": 0,
     "server": 1,
+    "server_side": "near",  # which physical side the serving team is on
+    "mode": "doubles",      # "singles" or "doubles"
+    "team_near": "Team A",  # name for the near-side team
+    "team_far": "Team B",   # name for the far-side team
     "status": "idle",   # idle | live | stopped
     "log": [],          # recent events
     "source": None,     # current video source path (None for webcam)
@@ -112,12 +116,14 @@ def _generate_detections():
         yield f'data: {payload}\n\n'
 
 
-def update_score(serving, receiving, server):
+def update_score(serving, receiving, server, server_side=None):
     """Called by game logic engine to push a score update."""
     with _lock:
         score_state["serving"] = serving
         score_state["receiving"] = receiving
         score_state["server"] = server
+        if server_side is not None:
+            score_state["server_side"] = server_side
 
 
 def add_log(message):
@@ -144,6 +150,35 @@ def set_frame_pos(frame_pos, fps):
     with _lock:
         score_state["frame_pos"] = frame_pos
         score_state["fps"] = fps
+
+
+_SETUP_KEYS = ("serving", "receiving", "server", "server_side",
+               "mode", "team_near", "team_far")
+
+
+def reset_score_state(config=None):
+    """Reset score_state to defaults, optionally applying setup config."""
+    with _lock:
+        score_state["serving"] = 0
+        score_state["receiving"] = 0
+        score_state["server"] = 1
+        score_state["server_side"] = "near"
+        score_state["mode"] = "doubles"
+        score_state["team_near"] = "Team A"
+        score_state["team_far"] = "Team B"
+        score_state["status"] = "idle"
+        score_state["log"] = []
+        score_state["frame_pos"] = 0
+        if config:
+            for k in _SETUP_KEYS:
+                if k in config:
+                    score_state[k] = config[k]
+
+
+def get_setup_config():
+    """Read setup fields under lock — called by GameState at init."""
+    with _lock:
+        return {k: score_state[k] for k in _SETUP_KEYS}
 
 
 # --- Routes ---
@@ -179,6 +214,15 @@ def start():
         return jsonify({"error": "Already running"}), 409
     data = request.get_json(force=True, silent=True) or {}
     source = data.get("source", 0)
+    # Extract setup config and reset state for new match
+    config = {k: data[k] for k in _SETUP_KEYS if k in data}
+    if "serving" in config:
+        config["serving"] = int(config["serving"])
+    if "receiving" in config:
+        config["receiving"] = int(config["receiving"])
+    if "server" in config:
+        config["server"] = int(config["server"])
+    reset_score_state(config)
     if _start_callback:
         _pipeline_thread = threading.Thread(target=_start_callback, args=(source,), daemon=True)
         _pipeline_thread.start()
@@ -215,6 +259,15 @@ def update_score_route():
             score_state["log"].append(msg)
             score_state["log"] = score_state["log"][-50:]
     return jsonify({"status": "ok"})
+
+
+@app.route('/swap_side', methods=['POST'])
+def swap_side():
+    """Toggle which physical side the serving team is on."""
+    with _lock:
+        cur = score_state["server_side"]
+        score_state["server_side"] = "far" if cur == "near" else "near"
+        return jsonify({"server_side": score_state["server_side"]})
 
 
 @app.route('/stop', methods=['POST'])
@@ -288,7 +341,12 @@ def analysis_data(match_id):
     court_poly = None
     try:
         with open('court.json') as f:
-            court_poly = _json.load(f)
+            raw = _json.load(f)
+        # Support both old (flat list) and new (dict) format
+        if isinstance(raw, dict):
+            court_poly = raw.get("corners")
+        else:
+            court_poly = raw
     except Exception:
         pass
     return jsonify({

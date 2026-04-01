@@ -163,12 +163,14 @@ def _show_and_confirm(frame, court_poly, mode_label):
 # ─────────────────────────────────────────────
 
 def _click_event(event, x, y, flags, param):
-    if event == cv2.EVENT_LBUTTONDOWN and len(_points) < 4:
+    if event == cv2.EVENT_LBUTTONDOWN and len(_points) < 6:
         scale_x, scale_y = param if param else (1.0, 1.0)
         orig_x = int(x / scale_x)
         orig_y = int(y / scale_y)
         _points.append((orig_x, orig_y))
-        print(f"  Corner {len(_points)} set: ({orig_x}, {orig_y})")
+        labels = ["TL", "TR", "BR", "BL", "Net-L", "Net-R"]
+        idx = len(_points) - 1
+        print(f"  Point {len(_points)} ({labels[idx]}) set: ({orig_x}, {orig_y})")
 
 
 MAX_DISPLAY_W, MAX_DISPLAY_H = 1280, 720
@@ -196,41 +198,48 @@ def calibrate_court(frame, cap=None, start_pos=0, fps=30):
     scale = min(MAX_DISPLAY_W / w, MAX_DISPLAY_H / h, 1.0)
     disp_w, disp_h = int(w * scale), int(h * scale)
 
-    window = "Manual Calibration - click 4 corners, then press ENTER"
+    window = "Manual Calibration - click 4 corners + 2 net points, then ENTER"
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window, disp_w, disp_h)
     cv2.setMouseCallback(window, _click_event, (scale, scale))
 
     print("\n[Calibration] Manual mode.")
-    print("  Click: 1=Top-left  2=Top-right  3=Bottom-right  4=Bottom-left")
+    print("  Click: 1=TL  2=TR  3=BR  4=BL  5=Net-Left  6=Net-Right")
     if cap is not None:
         print(f"  A/D keys to navigate +-{SEC_NAV_RANGE}s (resets points)")
-    print("  ENTER to confirm | R to reset\n")
+    print("  ENTER to confirm (after 6 points) | R to reset\n")
 
     while True:
         display = cv2.resize(current_frame, (disp_w, disp_h))
         preview = display.copy()
 
+        point_labels = ["TL", "TR", "BR", "BL", "Net-L", "Net-R"]
         for i, (ox, oy) in enumerate(_points):
             pt = (int(ox * scale), int(oy * scale))
-            cv2.circle(preview, pt, 6, (0, 255, 0), -1)
-            cv2.putText(preview, str(i + 1), (pt[0] + 8, pt[1] - 8),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-        if len(_points) == 4:
-            scaled_pts = [(int(ox * scale), int(oy * scale)) for ox, oy in _points]
+            color = (0, 255, 0) if i < 4 else (255, 255, 0)  # cyan for net points
+            cv2.circle(preview, pt, 6, color, -1)
+            cv2.putText(preview, point_labels[i], (pt[0] + 8, pt[1] - 8),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+        if len(_points) >= 4:
+            scaled_corners = [(int(ox * scale), int(oy * scale)) for ox, oy in _points[:4]]
             cv2.polylines(preview,
-                          [np.array(scaled_pts, dtype=np.int32)],
+                          [np.array(scaled_corners, dtype=np.int32)],
                           isClosed=True, color=(0, 255, 0), thickness=2)
+        if len(_points) == 6:
+            # Draw net line in cyan
+            nl = [(int(ox * scale), int(oy * scale)) for ox, oy in _points[4:6]]
+            cv2.line(preview, nl[0], nl[1], (255, 255, 0), 2)
 
         nav_hint = f"  A/D=sec({current_sec:+d}/{SEC_NAV_RANGE})  " if cap is not None else "  "
+        step = "corners" if len(_points) < 4 else "net" if len(_points) < 6 else "ENTER"
         cv2.putText(preview,
-                    f"Click 4 corners |{nav_hint}ENTER=confirm  R=reset",
+                    f"Next: {step} ({len(_points)}/6) |{nav_hint}ENTER=confirm  R=reset",
                     (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
         cv2.imshow(window, preview)
 
         key = cv2.waitKey(1) & 0xFF
 
-        if key == 13 and len(_points) == 4:   # ENTER
+        if key == 13 and len(_points) == 6:   # ENTER
             break
 
         if key == ord('r'):
@@ -269,19 +278,29 @@ def calibrate_court(frame, cap=None, start_pos=0, fps=30):
 # Main entry point
 # ─────────────────────────────────────────────
 
-def _save(court_poly):
+def _save(corners, net=None):
+    """Save court as {"corners": [...], "net": [...] or null}."""
+    payload = {"corners": corners.tolist()}
+    payload["net"] = net.tolist() if net is not None else None
     with open(COURT_FILE, "w") as f:
-        json.dump(court_poly.tolist(), f)
+        json.dump(payload, f)
     print(f"[Calibration] Court saved to {COURT_FILE}")
 
 
 def load_court():
+    """Return (corners, net) tuple.  net may be None.
+    Backward-compatible: old flat-list format → net=None."""
     if not os.path.exists(COURT_FILE):
         return None
     with open(COURT_FILE, "r") as f:
         data = json.load(f)
     print(f"[Calibration] Court loaded from {COURT_FILE}")
-    return np.array(data, dtype=np.float32)
+    if isinstance(data, dict):
+        corners = np.array(data["corners"], dtype=np.float32)
+        net = np.array(data["net"], dtype=np.float32) if data.get("net") else None
+        return corners, net
+    # Old format: flat list of 4 corners
+    return np.array(data, dtype=np.float32), None
 
 
 def get_court(frame, mode="manual", cap=None, start_pos=0, fps=30):
@@ -296,33 +315,42 @@ def get_court(frame, mode="manual", cap=None, start_pos=0, fps=30):
     Always saves result to court.json.
     """
     # Always try loading saved file first
-    court = load_court()
-    if court is not None:
-        return court
+    loaded = load_court()
+    if loaded is not None:
+        return loaded  # (corners, net) tuple
 
     if mode == "load":
         print("[Calibration] No court.json found. Run with mode='auto' or 'manual' first.")
         exit()
 
+    corners = None
+    net = None
+
     if mode == "auto":
         print("[Calibration] Attempting automatic court detection...")
-        court = _detect_court_auto(frame)
-        if court is not None:
-            result = _show_and_confirm(frame, court, "Auto-detected")
+        auto = _detect_court_auto(frame)
+        if auto is not None:
+            result = _show_and_confirm(frame, auto, "Auto-detected")
             if result not in ("retry", None):
-                court = result
+                corners = result
+                # Auto-detection doesn't find the net — user will need manual calibration
+                # for net line, or it stays None (falls back to midpoint inference)
             else:
-                court = None  # rejected — fall through to manual
+                corners = None
 
-        if court is None:
+        if corners is None:
             print("[Calibration] Auto-detection failed or rejected — switching to manual.")
-            court = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
+            all_pts = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
+            corners = all_pts[:4]
+            net = all_pts[4:6] if len(all_pts) >= 6 else None
 
     elif mode == "manual":
-        court = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
+        all_pts = calibrate_court(frame, cap=cap, start_pos=start_pos, fps=fps)
+        corners = all_pts[:4]
+        net = all_pts[4:6] if len(all_pts) >= 6 else None
 
-    _save(court)
-    return court
+    _save(corners, net)
+    return corners, net
 
 
 def is_in_court(cx, cy, court_poly):
@@ -331,6 +359,29 @@ def is_in_court(cx, cy, court_poly):
         court_poly.astype(np.int32), (float(cx), float(cy)), False
     )
     return result >= 0
+
+
+def get_court_half(cx, cy, court_poly, net_line=None):
+    """Return 'near' or 'far' depending on which half of the court (cx, cy) is on.
+
+    If net_line is provided (2 points), it is used as the midline.
+    Otherwise falls back to midpoint of left edge (TL→BL) / right edge (TR→BR).
+    'far'  = top half (lower y, closer to camera far end)
+    'near' = bottom half (higher y, closer to camera near end)
+    """
+    if net_line is not None and len(net_line) >= 2:
+        mid_left, mid_right = net_line[0], net_line[1]
+    else:
+        tl, tr, br, bl = court_poly[:4]
+        mid_left = (tl + bl) / 2.0
+        mid_right = (tr + br) / 2.0
+
+    # Cross product of midline vector with vector to the point.
+    # Positive = below midline (near), negative = above midline (far).
+    mx, my = mid_right[0] - mid_left[0], mid_right[1] - mid_left[1]
+    px, py = cx - mid_left[0], cy - mid_left[1]
+    cross = mx * py - my * px
+    return "near" if cross >= 0 else "far"
 
 
 def calibration_thread(calib_queue, court_container, stop_event):
@@ -351,7 +402,7 @@ def calibration_thread(calib_queue, court_container, stop_event):
         if poly is not None:
             with court_container["lock"]:
                 court_container["poly"] = poly
-                _save(poly)
+                _save(poly)  # auto-detect: no net line
             print("[Calibration] Court detected automatically!")
             break
     print("Calibration thread stopped.")

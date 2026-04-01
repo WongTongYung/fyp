@@ -31,14 +31,15 @@
         <div class="container scoreboard">
             <h3>Scoreboard</h3>
             <div class="score-card">
-                <span class="score-label">Serving Team</span>
+                <span class="score-label" id="servingLabel">Team A</span>
                 <span class="score-value" id="servingScore">00</span>
             </div>
             <div class="server-indicator">
                 Server #<span id="serverNumber">1</span>
+                &nbsp;|&nbsp; Side: <span id="serverSide">near</span>
             </div>
             <div class="score-card">
-                <span class="score-label">Receiving</span>
+                <span class="score-label" id="receivingLabel">Team B</span>
                 <span class="score-value" id="receivingScore">00</span>
             </div>
         </div>
@@ -55,6 +56,35 @@
             <div class="source-input">
                 <label for="sourceInput">Source:</label>
                 <input type="text" id="sourceInput" value="styles/FixedCamera.mp4" placeholder="video path or 0 for webcam">
+            </div>
+            <div class="setup-row">
+                <label>Mode:</label>
+                <button class="btn btn-toggle" data-mode="singles">Singles</button>
+                <button class="btn btn-toggle active" data-mode="doubles">Doubles</button>
+            </div>
+            <div class="setup-row">
+                <label>Serving Side:</label>
+                <button class="btn btn-toggle active" data-side="near">Near</button>
+                <button class="btn btn-toggle" data-side="far">Far</button>
+            </div>
+            <div class="setup-row" id="serverNumRow">
+                <label>Server #:</label>
+                <button class="btn btn-toggle active" data-srv="1">1</button>
+                <button class="btn btn-toggle" data-srv="2">2</button>
+            </div>
+            <div class="setup-row">
+                <label>Near Team:</label>
+                <input type="text" id="teamNear" value="Team A" class="setup-input">
+            </div>
+            <div class="setup-row">
+                <label>Far Team:</label>
+                <input type="text" id="teamFar" value="Team B" class="setup-input">
+            </div>
+            <div class="setup-row">
+                <label>Start Score:</label>
+                <input type="number" id="startServing" value="0" min="0" class="setup-input-sm">
+                <span>-</span>
+                <input type="number" id="startReceiving" value="0" min="0" class="setup-input-sm">
             </div>
             <div class="control-buttons">
                 <button id="startBtn" class="btn btn-start">Start</button>
