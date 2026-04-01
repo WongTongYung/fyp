@@ -21,7 +21,7 @@
         .panel { border:2px solid #333; background:#fff; padding:12px; }
         .panel h3 { font-size:15px; font-weight:bold; margin-bottom:10px; }
 
-        #courtCanvas { display:block; width:100%; }
+        #courtCanvas { display:block; width:100%; max-height:500px; }
         .chart-wrap { position:relative; height:340px; }
         .legend { display:flex; gap:16px; font-size:12px; margin-top:6px; }
         .legend span { display:inline-flex; align-items:center; gap:5px; }
@@ -72,8 +72,9 @@
             <h3>Bounce Map</h3>
             <canvas id="courtCanvas" height="320"></canvas>
             <div class="legend">
-                <span><span class="dot" style="background:#ffeb3b;border:1px solid #999;"></span> IN</span>
+                <span><span class="dot" style="background:#66bb6a;border:1px solid #999;"></span> IN</span>
                 <span><span class="dot" style="background:#ef5350;border:1px solid #999;"></span> OUT</span>
+                <span><span class="dot" style="background:#42a5f5;border:1px solid #999;width:0;height:0;border-radius:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:10px solid #42a5f5;"></span> SERVE</span>
             </div>
         </div>
 
@@ -107,46 +108,85 @@ function fmtDuration(seconds) {
     return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
 }
 
-// --- Court bounce map ---
+// --- Court bounce map (top-down, same as live dashboard) ---
+// Court dimensions in cm
+const CW = 609.6, CL = 1341.12, NET_Y = 670.56;
+const KITCHEN_NEAR = 457.2, KITCHEN_FAR = 883.92, CENTER_X = 304.8;
+
 function drawCourtMap(courtPoly, bounces) {
     const canvas = document.getElementById('courtCanvas');
     const ctx = canvas.getContext('2d');
     const W = canvas.offsetWidth || 500;
+    const maxH = 500;
     canvas.width = W;
-
-    // Infer frame bounds from court corners (corners stay near the edges)
-    const frameW = Math.max(...courtPoly.map(p => p[0])) * 1.06;
-    const frameH = Math.max(...courtPoly.map(p => p[1])) * 1.10;
-    const H = Math.round(W * frameH / frameW);
+    // Maintain court aspect ratio, capped at maxH
+    const H = Math.min(Math.round(W * CL / CW), maxH);
     canvas.height = H;
 
-    const sx = x => x / frameW * W;
-    const sy = y => y / frameH * H;
+    // Scale court to fit canvas with margin
+    const margin = 10;
+    const scaleX = (W - margin * 2) / CW;
+    const scaleY = (H - margin * 2) / CL;
+    const sc = Math.min(scaleX, scaleY);
+    const ox = (W - CW * sc) / 2;
+    const oy = (H - CL * sc) / 2;
+
+    function c2c(cx, cy) { return [ox + cx * sc, oy + cy * sc]; }
 
     // Background
     ctx.fillStyle = '#2e7d32';
     ctx.fillRect(0, 0, W, H);
 
-    // Court surface fill
-    ctx.beginPath();
-    ctx.moveTo(sx(courtPoly[0][0]), sy(courtPoly[0][1]));
-    for (let i = 1; i < courtPoly.length; i++)
-        ctx.lineTo(sx(courtPoly[i][0]), sy(courtPoly[i][1]));
-    ctx.closePath();
+    // Court surface
+    var tl = c2c(0, 0);
     ctx.fillStyle = '#388e3c';
-    ctx.fill();
+    ctx.fillRect(tl[0], tl[1], CW * sc, CL * sc);
 
-    // Court outline
-    ctx.beginPath();
-    ctx.moveTo(sx(courtPoly[0][0]), sy(courtPoly[0][1]));
-    for (let i = 1; i < courtPoly.length; i++)
-        ctx.lineTo(sx(courtPoly[i][0]), sy(courtPoly[i][1]));
-    ctx.closePath();
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    // Draw lines helper
+    function drawLine(x1, y1, x2, y2, color, width) {
+        var a = c2c(x1, y1), b = c2c(x2, y2);
+        ctx.strokeStyle = color || '#fff';
+        ctx.lineWidth = width || 2;
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1]);
+        ctx.lineTo(b[0], b[1]);
+        ctx.stroke();
+    }
+
+    // Court boundary
+    drawLine(0, 0, CW, 0);
+    drawLine(0, CL, CW, CL);
+    drawLine(0, 0, 0, CL);
+    drawLine(CW, 0, CW, CL);
+
+    // Kitchen lines
+    drawLine(0, KITCHEN_NEAR, CW, KITCHEN_NEAR);
+    drawLine(0, KITCHEN_FAR, CW, KITCHEN_FAR);
+
+    // Net
+    drawLine(0, NET_Y, CW, NET_Y, '#ddd', 3);
+
+    // Center service lines
+    drawLine(CENTER_X, 0, CENTER_X, KITCHEN_NEAR);
+    drawLine(CENTER_X, KITCHEN_FAR, CENTER_X, CL);
+
+    // Zone labels
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = 'bold ' + Math.max(10, 14 * sc) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var labels = [
+        ['L Service', CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['R Service', CENTER_X + CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['Kitchen', CENTER_X, (KITCHEN_NEAR + NET_Y) / 2],
+        ['Kitchen', CENTER_X, (NET_Y + KITCHEN_FAR) / 2],
+        ['L Service', CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+        ['R Service', CENTER_X + CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+    ];
+    for (var i = 0; i < labels.length; i++) {
+        var p = c2c(labels[i][1], labels[i][2]);
+        ctx.fillText(labels[i][0], p[0], p[1]);
+    }
 
     if (!bounces.length) {
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
@@ -156,17 +196,31 @@ function drawCourtMap(courtPoly, bounces) {
         return;
     }
 
-    // Bounce dots
-    bounces.forEach(b => {
-        if (b.cx == null || b.cy == null) return;
-        const isOut = b.notes && b.notes.includes('OUT');
-        ctx.beginPath();
-        ctx.arc(sx(b.cx), sy(b.cy), 5, 0, Math.PI * 2);
-        ctx.fillStyle = isOut ? '#ef5350' : '#ffeb3b';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
+    // Bounce and serve markers
+    bounces.forEach(function(b) {
+        if (b.court_x == null || b.court_y == null) return;
+        var bp = c2c(b.court_x, b.court_y);
+        if (b.result === 'SERVE') {
+            // Serve marker: triangle
+            ctx.beginPath();
+            ctx.moveTo(bp[0], bp[1] - 7);
+            ctx.lineTo(bp[0] - 6, bp[1] + 5);
+            ctx.lineTo(bp[0] + 6, bp[1] + 5);
+            ctx.closePath();
+            ctx.fillStyle = '#42a5f5';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(bp[0], bp[1], 5, 0, Math.PI * 2);
+            ctx.fillStyle = b.result === 'IN' ? '#66bb6a' : '#ef5350';
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+        }
     });
 }
 

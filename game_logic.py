@@ -39,9 +39,9 @@ class GameState:
         # Serve detection (velocity-based)
         self.ball_history = []              # recent positions: [(cx, cy, time), ...]
         self.HISTORY_SIZE = 5              # keep last N detections
-        self.SERVE_VELOCITY_THRESH = 80    # pixels/frame displacement to trigger serve
+        self.SERVE_VELOCITY_THRESH = 120   # pixels/frame displacement to trigger serve
         self.serve_state = "WAITING"       # WAITING → SERVE_DETECTED → RALLY_ACTIVE
-        self.score_cooldown_until = 0      # ignore ball activity until this time
+        self.score_cooldown_until = time.monotonic() + 5.0  # ignore first 5s (pre-game toss-backs)
         self.SERVE_FALLBACK_SEC = 10       # if no serve detected after this, fall back to bounce-based rally
 
     def _get_court(self):
@@ -106,6 +106,18 @@ class GameState:
         """Use the last recorded bounce to decide who won the rally."""
         if not self.rally_bounces:
             return
+        # Ignore rallies with only 1 bounce — likely a hand toss/pass,
+        # not a real rally. A real serve rally has at least 2 bounces
+        # (serve lands + return or serve lands + ball dies).
+        if len(self.rally_bounces) < 2:
+            self._push("rally_ignored",
+                        notes=f"Only {len(self.rally_bounces)} bounce — likely not a real rally")
+            self.rally_bounces = []
+            self.rally_active = False
+            self.serve_state = "WAITING"
+            self.ball_history = []
+            self.score_cooldown_until = time.monotonic() + 3.0
+            return
         last = self.rally_bounces[-1]
         if last["in_court"]:
             # Ball landed IN on this side and wasn't returned — that side loses
@@ -131,6 +143,10 @@ class GameState:
         Tracks velocity for serve detection and vertical direction for bounces.
         """
         self.last_seen_time = time.monotonic()
+
+        # Skip duplicate detections — same position provides no direction info
+        if self.prev_cx is not None and cx == self.prev_cx and cy == self.prev_cy:
+            return
 
         # --- Serve detection via velocity spike ---
         # Skip all detection during post-score cooldown
@@ -246,6 +262,11 @@ def game_logic_thread(coord_queue, stop_event, match_id, court_container,
             if pause_event and pause_event.is_set():
                 # Freeze — don't resolve rallies or clear state while paused
                 state.last_seen_time = time.monotonic()
+                # Reset ball tracking so resume starts with fresh direction data
+                state.prev_cx = None
+                state.prev_cy = None
+                state.prev_direction_y = None
+                state.ball_history = []
                 continue
             state.process_missing()
             continue

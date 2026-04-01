@@ -359,21 +359,36 @@ def analysis_page(match_id):
 @app.route('/api/analysis/<int:match_id>')
 def analysis_data(match_id):
     import json as _json
+    import numpy as np
     from database import get_match_summary, get_match_bounces, get_match_scores
+    from calibration import compute_homography, pixel_to_court
     summary = get_match_summary(match_id)
     bounces = get_match_bounces(match_id)
     scores = get_match_scores(match_id)
     court_poly = None
+    H = None
     try:
         with open('court.json') as f:
             raw = _json.load(f)
-        # Support both old (flat list) and new (dict) format
         if isinstance(raw, dict):
             court_poly = raw.get("corners")
+            net = raw.get("net")
         else:
             court_poly = raw
+            net = None
+        if court_poly:
+            H = compute_homography(np.array(court_poly, dtype=np.float32),
+                                   net=np.array(net, dtype=np.float32) if net else None)
     except Exception:
         pass
+    # Convert pixel bounce coordinates to court coordinates (cm)
+    if H is not None:
+        for b in bounces:
+            if b.get("cx") is not None and b.get("cy") is not None:
+                cx_cm, cy_cm = pixel_to_court(b["cx"], b["cy"], H)
+                b["court_x"] = round(cx_cm, 1)
+                b["court_y"] = round(cy_cm, 1)
+                b["result"] = "OUT" if (b.get("notes") and "OUT" in b["notes"]) else "IN"
     return jsonify({
         "match": summary["match"],
         "stats": summary["stats"],
