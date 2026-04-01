@@ -145,6 +145,18 @@ def add_bounce(court_x, court_y, result):
         score_state["bounces"] = score_state["bounces"][-50:]
 
 
+def add_serve(court_x, court_y, side):
+    """Push a serve event (court coords in cm) for the top-down view."""
+    with _lock:
+        score_state["bounces"].append({
+            "court_x": round(court_x, 1),
+            "court_y": round(court_y, 1),
+            "result": "SERVE",
+            "side": side,
+        })
+        score_state["bounces"] = score_state["bounces"][-50:]
+
+
 def set_status(status):
     """Set status: 'idle', 'live', or 'stopped'."""
     with _lock:

@@ -15,9 +15,9 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 20px;
+    padding: 6px 20px;
     border-bottom: 2px solid #333;
-    margin-bottom: 20px;
+    margin-bottom: 8px;
 }
 
 .header h1 {
@@ -30,22 +30,23 @@ body {
     font-weight: bold;
 }
 
-/* Main Layout: 3-row Grid */
+/* Main Layout: 2-row Grid */
 .grid-container {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    grid-template-rows: 3fr 1fr 1fr;
-    gap: 15px;
-    height: calc(100vh - 120px);
+    grid-template-rows: 3fr 1fr;
+    gap: 8px;
+    height: calc(100vh - 80px);
 }
 
-/* Controls span rows 2+3 on the right */
-.controls {
-    grid-row: 2 / 4;
-}
+/* Explicit grid placement */
+.video-section   { grid-row: 1; grid-column: 1; }
+.scoreboard      { grid-row: 1; grid-column: 2; }
+.log-section     { grid-row: 2; grid-column: 1; }
+.controls        { grid-row: 2; grid-column: 2; overflow-y: auto; }
 
 .container {
-    padding: 15px;
+    padding: 10px;
     background-color: #fff;
 }
 
@@ -65,13 +66,35 @@ body {
     color: #d32f2f;
 }
 
-.video-feed {
+.video-court-row {
     flex: 1;
+    display: flex;
+    gap: 8px;
+    min-height: 0;
+}
+
+.video-feed {
+    flex: 3;
     background-color: #e0e0e0;
     border: 2px solid #333;
     position: relative;
     overflow: hidden;
-    min-height: 300px;
+}
+
+.court-view-panel {
+    flex: 1;
+    border: 2px solid #333;
+    background-color: #2e7d32;
+    position: relative;
+    min-width: 0;
+}
+
+.court-view-panel canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
 }
 
 #liveFeed {
@@ -105,8 +128,8 @@ body {
 
 .log-box {
     border: 2px solid #333;
-    padding: 10px;
-    height: 120px;
+    padding: 6px;
+    height: 80px;
     overflow-y: auto;
     background-color: #fff;
     font-family: monospace;
@@ -169,22 +192,22 @@ body {
 
 /* Controls */
 .controls h3 {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: bold;
     text-align: center;
-    margin-bottom: 10px;
+    margin-bottom: 6px;
 }
 
 .control-buttons {
     display: flex;
     justify-content: center;
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 6px;
 }
 
 .btn {
-    padding: 10px 25px;
-    font-size: 16px;
+    padding: 8px 18px;
+    font-size: 14px;
     font-weight: bold;
     border: 2px solid #333;
     background-color: #fff;
@@ -228,15 +251,15 @@ body {
 .setup-row {
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin-bottom: 5px;
 }
 
 .setup-row label {
     font-weight: bold;
-    font-size: 14px;
+    font-size: 13px;
     white-space: nowrap;
-    min-width: 90px;
+    min-width: 80px;
 }
 
 .setup-input {
@@ -264,22 +287,3 @@ body {
     color: #fff;
 }
 
-/* Court Top-Down View */
-.court-view-section {
-    display: flex;
-    flex-direction: column;
-}
-
-.court-view-section h3 {
-    font-size: 18px;
-    font-weight: bold;
-    margin-bottom: 5px;
-}
-
-#courtViewCanvas {
-    flex: 1;
-    border: 2px solid #333;
-    background-color: #2e7d32;
-    display: block;
-    width: 100%;
-}

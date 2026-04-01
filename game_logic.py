@@ -1,7 +1,7 @@
 import queue
 import time
 from database import log_event, log_score
-from server import update_score, add_log, get_setup_config, add_bounce
+from server import update_score, add_log, get_setup_config, add_bounce, add_serve
 from calibration import is_in_court, get_court_half, pixel_to_court
 
 
@@ -36,6 +36,14 @@ class GameState:
         self.last_seen_time = None     # timestamp of last ball detection
         self.bounce_cooldown = 0       # prevent double-counting a bounce
 
+        # Serve detection (velocity-based)
+        self.ball_history = []              # recent positions: [(cx, cy, time), ...]
+        self.HISTORY_SIZE = 5              # keep last N detections
+        self.SERVE_VELOCITY_THRESH = 80    # pixels/frame displacement to trigger serve
+        self.serve_state = "WAITING"       # WAITING → SERVE_DETECTED → RALLY_ACTIVE
+        self.score_cooldown_until = 0      # ignore ball activity until this time
+        self.SERVE_FALLBACK_SEC = 10       # if no serve detected after this, fall back to bounce-based rally
+
     def _get_court(self):
         """Return (court_poly, net_line, H) or (None, None, None)."""
         if self.court_container is None:
@@ -44,6 +52,21 @@ class GameState:
             return (self.court_container["poly"],
                     self.court_container.get("net"),
                     self.court_container.get("H"))
+
+    def _get_velocity(self):
+        """Calculate ball velocity from recent history.
+        Returns (speed, dx, dy) where speed is pixels/frame and
+        dx, dy indicate the movement direction."""
+        if len(self.ball_history) < 3:
+            return 0, 0, 0
+        # Use first and last entries for average velocity
+        x0, y0, _ = self.ball_history[0]
+        x1, y1, _ = self.ball_history[-1]
+        n_frames = len(self.ball_history) - 1
+        dx = (x1 - x0) / n_frames
+        dy = (y1 - y0) / n_frames
+        speed = (dx ** 2 + dy ** 2) ** 0.5
+        return speed, dx, dy
 
     def _push(self, event_type, cx=None, cy=None, conf=None, notes=None):
         """Log to DB and dashboard. Does NOT push score — call update_score() only when score changes."""
@@ -98,13 +121,42 @@ class GameState:
 
         self.rally_bounces = []
         self.rally_active = False
+        self.serve_state = "WAITING"
+        self.ball_history = []
+        self.score_cooldown_until = time.monotonic() + 3.0  # ignore toss-backs for 3s
 
     def process_coord(self, cx, cy, conf):
         """
         Called for every ball detection.
-        Tracks vertical direction to detect bounces.
+        Tracks velocity for serve detection and vertical direction for bounces.
         """
         self.last_seen_time = time.monotonic()
+
+        # --- Serve detection via velocity spike ---
+        # Skip all detection during post-score cooldown
+        if time.monotonic() < self.score_cooldown_until:
+            self.prev_cx = cx
+            self.prev_cy = cy
+            return
+
+        self.ball_history.append((cx, cy, self.last_seen_time))
+        if len(self.ball_history) > self.HISTORY_SIZE:
+            self.ball_history = self.ball_history[-self.HISTORY_SIZE:]
+
+        if self.serve_state == "WAITING" and len(self.ball_history) >= 3:
+            speed, dx, dy = self._get_velocity()
+            if speed >= self.SERVE_VELOCITY_THRESH:
+                court_poly, net_line, H = self._get_court()
+                if court_poly is not None:
+                    ball_side = get_court_half(cx, cy, court_poly, net_line=net_line)
+                    # Ball should be on or near the server's side when serve starts
+                    if ball_side == self.server_side:
+                        self.serve_state = "SERVE_DETECTED"
+                        self._push("serve_detected", cx=cx, cy=cy, conf=conf,
+                                   notes=f"Serve detected from {self.server_side} side")
+                        if H is not None:
+                            cx_cm, cy_cm = pixel_to_court(cx, cy, H)
+                            add_serve(cx_cm, cy_cm, self.server_side)
 
         if self.prev_cy is not None:
             dy = cy - self.prev_cy          # positive = moving down, negative = moving up
@@ -123,11 +175,24 @@ class GameState:
                     in_court = is_in_court(bx, by, court_poly)
                     result = "IN" if in_court else "OUT"
                     side = get_court_half(bx, by, court_poly, net_line=net_line)
-                    self.rally_bounces.append({
-                        "side": side, "in_court": in_court,
-                        "cx": bx, "cy": by,
-                    })
-                    self.rally_active = True
+                    # Only start tracking a rally after a serve is detected.
+                    # Fallback: if no serve detected for SERVE_FALLBACK_SEC after
+                    # cooldown, allow bounce-based rally start (original behavior)
+                    # so the system never gets stuck.
+                    cooldown_expired = time.monotonic() > self.score_cooldown_until
+                    fallback = (cooldown_expired
+                                and self.serve_state == "WAITING"
+                                and self.score_cooldown_until > 0
+                                and time.monotonic() - self.score_cooldown_until >= self.SERVE_FALLBACK_SEC)
+                    serve_ok = self.serve_state != "WAITING" or fallback or self.score_cooldown_until == 0
+                    if (in_court or self.rally_active) and serve_ok:
+                        self.rally_bounces.append({
+                            "side": side, "in_court": in_court,
+                            "cx": bx, "cy": by,
+                        })
+                        self.rally_active = True
+                        if self.serve_state == "SERVE_DETECTED":
+                            self.serve_state = "RALLY_ACTIVE"
                     # Push bounce to top-down court view
                     if H is not None:
                         cx_cm, cy_cm = pixel_to_court(bx, by, H)
@@ -152,9 +217,16 @@ class GameState:
                 and self.last_seen_time is not None
                 and time.monotonic() - self.last_seen_time >= self.RALLY_END_SEC):
             self.resolve_rally()
+        # Reset serve detection if ball disappears for too long without a rally
+        if (self.serve_state == "SERVE_DETECTED"
+                and self.last_seen_time is not None
+                and time.monotonic() - self.last_seen_time >= self.RALLY_END_SEC):
+            self.serve_state = "WAITING"
+            self.ball_history = []
 
 
-def game_logic_thread(coord_queue, stop_event, match_id, court_container):
+def game_logic_thread(coord_queue, stop_event, match_id, court_container,
+                      pause_event=None):
     """
     T4 — reads ball coordinates from coord_queue,
     runs game state logic, updates scoreboard and DB.
@@ -169,6 +241,12 @@ def game_logic_thread(coord_queue, stop_event, match_id, court_container):
         except queue.Empty:
             if stop_event.is_set():
                 break
+            # Don't resolve rallies while paused/stopped — ball disappearance
+            # is not a real rally end, just the camera being paused.
+            if pause_event and pause_event.is_set():
+                # Freeze — don't resolve rallies or clear state while paused
+                state.last_seen_time = time.monotonic()
+                continue
             state.process_missing()
             continue
 

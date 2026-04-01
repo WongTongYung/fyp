@@ -150,7 +150,7 @@ def run_pipeline(source):
     t1 = threading.Thread(target=capture_thread, args=(cap, save_queue, process_queue, stop_event, fps if is_file else 0, calib_queue, static_frame, pause_event))
     t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event))
     t3 = threading.Thread(target=processing_thread, args=(process_queue, stop_event, model, coord_queue, court_container))
-    t4 = threading.Thread(target=game_logic_thread, args=(coord_queue, stop_event, match_id, court_container))
+    t4 = threading.Thread(target=game_logic_thread, args=(coord_queue, stop_event, match_id, court_container, pause_event))
 
     set_status("live")
     t1.start()
@@ -201,4 +201,6 @@ if __name__ == "__main__":
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            pass
+            print("\nShutting down...")
+            set_status("shutdown")
+            time.sleep(1)  # give frontend time to receive the shutdown signal

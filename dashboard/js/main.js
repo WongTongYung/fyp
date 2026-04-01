@@ -249,6 +249,8 @@ function pollScore() {
                 isRunning = false;
                 statusEl.textContent = '(Status: Stopped)';
                 statusEl.classList.remove('live');
+            } else if (data.status === 'shutdown') {
+                window.close();
             }
 
             // Append new server-side log entries (tracked separately from JS-only addLog calls)
@@ -256,12 +258,6 @@ function pollScore() {
                 addLog(msg);
                 _serverLogCount++;
                 // Pick up bounce IN/OUT events for the canvas overlay
-                if (msg.includes('[bounce]')) {
-                    if (msg.includes('Bounce IN'))
-                        lastBounce = { result: 'IN', time: Date.now() };
-                    else if (msg.includes('Bounce OUT'))
-                        lastBounce = { result: 'OUT', time: Date.now() };
-                }
             });
 
             // Sync bounce markers for court view
@@ -283,8 +279,9 @@ const CW = 609.6, CL = 1341.12, NET_Y = 670.56;
 const KITCHEN_NEAR = 457.2, KITCHEN_FAR = 883.92, CENTER_X = 304.8;
 
 function drawCourtView() {
-    const W = courtCanvas.width = courtCanvas.offsetWidth;
-    const H = courtCanvas.height = courtCanvas.offsetHeight || 200;
+    const parent = courtCanvas.parentElement;
+    const W = courtCanvas.width = parent.clientWidth || 200;
+    const H = courtCanvas.height = parent.clientHeight || 200;
 
     // Scale court to fit canvas with margin
     const margin = 10;
@@ -339,29 +336,43 @@ function drawCourtView() {
     courtCtx.textAlign = 'center';
     courtCtx.textBaseline = 'middle';
     var labels = [
-        ['P1', CENTER_X / 2, KITCHEN_NEAR / 2],
-        ['P2', CENTER_X + CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['L Service', CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['R Service', CENTER_X + CENTER_X / 2, KITCHEN_NEAR / 2],
         ['Kitchen', CENTER_X, (KITCHEN_NEAR + NET_Y) / 2],
         ['Kitchen', CENTER_X, (NET_Y + KITCHEN_FAR) / 2],
-        ['P3', CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
-        ['P4', CENTER_X + CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+        ['L Service', CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+        ['R Service', CENTER_X + CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
     ];
     for (var i = 0; i < labels.length; i++) {
         var p = c2c(labels[i][1], labels[i][2]);
         courtCtx.fillText(labels[i][0], p[0], p[1]);
     }
 
-    // Bounce markers
+    // Bounce and serve markers
     for (var j = 0; j < courtBounces.length; j++) {
         var b = courtBounces[j];
         var bp = c2c(b.court_x, b.court_y);
-        courtCtx.beginPath();
-        courtCtx.arc(bp[0], bp[1], 5, 0, Math.PI * 2);
-        courtCtx.fillStyle = b.result === 'IN' ? '#66bb6a' : '#ef5350';
-        courtCtx.fill();
-        courtCtx.strokeStyle = '#fff';
-        courtCtx.lineWidth = 1;
-        courtCtx.stroke();
+        if (b.result === 'SERVE') {
+            // Serve marker: triangle
+            courtCtx.beginPath();
+            courtCtx.moveTo(bp[0], bp[1] - 7);
+            courtCtx.lineTo(bp[0] - 6, bp[1] + 5);
+            courtCtx.lineTo(bp[0] + 6, bp[1] + 5);
+            courtCtx.closePath();
+            courtCtx.fillStyle = '#42a5f5';
+            courtCtx.fill();
+            courtCtx.strokeStyle = '#fff';
+            courtCtx.lineWidth = 1;
+            courtCtx.stroke();
+        } else {
+            courtCtx.beginPath();
+            courtCtx.arc(bp[0], bp[1], 5, 0, Math.PI * 2);
+            courtCtx.fillStyle = b.result === 'IN' ? '#66bb6a' : '#ef5350';
+            courtCtx.fill();
+            courtCtx.strokeStyle = '#fff';
+            courtCtx.lineWidth = 1;
+            courtCtx.stroke();
+        }
     }
 
     // Current ball position
@@ -494,8 +505,9 @@ function drawOverlay(data) {
                 ? 1 - (age - (BOUNCE_DISPLAY_MS - 800)) / 800
                 : 1;
 
-            const text  = lastBounce.result;                          // 'IN' or 'OUT'
-            const color = lastBounce.result === 'IN' ? '#ffeb3b' : '#ef5350';
+            const text  = lastBounce.result;                          // 'IN', 'OUT', or 'SERVE'
+            const color = lastBounce.result === 'IN' ? '#ffeb3b'
+                        : lastBounce.result === 'SERVE' ? '#42a5f5' : '#ef5350';
 
             ctx.save();
             ctx.globalAlpha = alpha;
