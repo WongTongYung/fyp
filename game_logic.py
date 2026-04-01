@@ -34,11 +34,10 @@ class GameState:
             return self.court_container["poly"]
 
     def _push(self, event_type, cx=None, cy=None, conf=None, notes=None):
-        """Log to DB and push to dashboard."""
+        """Log to DB and dashboard. Does NOT push score — call update_score() only when score changes."""
         log_event(self.match_id, event_type, cx=cx, cy=cy,
                   confidence=conf, notes=notes)
         add_log(f"[{event_type}] {notes or ''}")
-        update_score(self.server_score, self.receiver_score, self.server_number)
 
     def server_wins_point(self):
         self.server_score += 1
@@ -46,6 +45,7 @@ class GameState:
                   self.receiver_score, self.server_number)
         self._push("point_server",
                    notes=f"Score {self.server_score}-{self.receiver_score}-{self.server_number}")
+        update_score(self.server_score, self.receiver_score, self.server_number)
 
     def side_out(self):
         """Server loses rally — switch service."""
@@ -62,6 +62,7 @@ class GameState:
         self._push("side_out",
                    notes=f"Server #{self.server_number} now serving. "
                          f"{self.server_score}-{self.receiver_score}")
+        update_score(self.server_score, self.receiver_score, self.server_number)
 
     def process_coord(self, cx, cy, conf):
         """

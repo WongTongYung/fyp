@@ -17,6 +17,10 @@ let serverNumber = 1;
 let isRunning = false;
 let _serverLogCount = 0;  // tracks how many server-side log entries we've shown
 
+// --- Bounce overlay ---
+let lastBounce = null;          // { result: 'IN'|'OUT', time: ms }
+const BOUNCE_DISPLAY_MS = 2500; // how long to show the badge
+
 function updateScoreboard() {
     document.getElementById('servingScore').textContent = String(servingScore).padStart(2, '0');
     document.getElementById('receivingScore').textContent = String(receivingScore).padStart(2, '0');
@@ -118,23 +122,37 @@ function switchToLiveFeed() {
 
 // --- Keyboard shortcuts for testing scores ---
 // Press 's' to add point to serving team, 'r' for receiving, 'n' to switch server
+function postScore(log) {
+    fetch('/update_score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serving: servingScore, receiving: receivingScore, server: serverNumber, log })
+    }).catch(() => {});
+}
+
 document.addEventListener('keydown', function (e) {
     if (!isRunning) return;
 
     if (e.key === 's') {
         servingScore++;
         updateScoreboard();
-        addLog('Point Server. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber);
+        const msg = 'Point Server. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+        addLog(msg);
+        postScore(msg);
     }
     if (e.key === 'r') {
         receivingScore++;
         updateScoreboard();
-        addLog('Point Receiver. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber);
+        const msg = 'Point Receiver. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+        addLog(msg);
+        postScore(msg);
     }
     if (e.key === 'n') {
         serverNumber = serverNumber === 1 ? 2 : 1;
         updateScoreboard();
-        addLog('Switch Sides (Left/Right)');
+        const msg = 'Switch Server #' + serverNumber;
+        addLog(msg);
+        postScore(msg);
     }
 });
 
@@ -168,6 +186,13 @@ function pollScore() {
             data.log.slice(_serverLogCount).forEach(msg => {
                 addLog(msg);
                 _serverLogCount++;
+                // Pick up bounce IN/OUT events for the canvas overlay
+                if (msg.includes('[bounce]')) {
+                    if (msg.includes('Bounce IN'))
+                        lastBounce = { result: 'IN', time: Date.now() };
+                    else if (msg.includes('Bounce OUT'))
+                        lastBounce = { result: 'OUT', time: Date.now() };
+                }
             });
         })
         .catch(() => {}); // silently ignore if server not running
@@ -266,6 +291,38 @@ function drawOverlay(data) {
         ctx.fillRect(8, 8, ftw + 12, 24);
         ctx.fillStyle = '#00ff00';
         ctx.fillText(fpsText, 14, 26);
+    }
+
+    // --- Bounce IN / OUT badge ---
+    if (lastBounce) {
+        const age = Date.now() - lastBounce.time;
+        if (age < BOUNCE_DISPLAY_MS) {
+            // Fade out over the last 800 ms
+            const alpha = age > BOUNCE_DISPLAY_MS - 800
+                ? 1 - (age - (BOUNCE_DISPLAY_MS - 800)) / 800
+                : 1;
+
+            const text  = lastBounce.result;                          // 'IN' or 'OUT'
+            const color = lastBounce.result === 'IN' ? '#ffeb3b' : '#ef5350';
+
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.font = 'bold 80px monospace';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const tw = ctx.measureText(text).width;
+            const bx = w / 2 - tw / 2 - 18;
+            const by = h / 2 - 50;
+            ctx.fillStyle = 'rgba(0,0,0,0.55)';
+            ctx.fillRect(bx, by, tw + 36, 90);
+
+            ctx.fillStyle = color;
+            ctx.fillText(text, w / 2, h / 2);
+            ctx.restore();
+        } else {
+            lastBounce = null;  // expired — clear so it stops drawing
+        }
     }
 }
 

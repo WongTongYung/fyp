@@ -202,6 +202,21 @@ def resume():
     return jsonify({"status": "live"})
 
 
+@app.route('/update_score', methods=['POST'])
+def update_score_route():
+    """Called by the dashboard keyboard shortcuts to persist a manual score change."""
+    data = request.get_json(force=True, silent=True) or {}
+    with _lock:
+        score_state["serving"]   = int(data.get("serving",  score_state["serving"]))
+        score_state["receiving"] = int(data.get("receiving", score_state["receiving"]))
+        score_state["server"]    = int(data.get("server",    score_state["server"]))
+        msg = data.get("log")
+        if msg:
+            score_state["log"].append(msg)
+            score_state["log"] = score_state["log"][-50:]
+    return jsonify({"status": "ok"})
+
+
 @app.route('/stop', methods=['POST'])
 def stop():
     if _pause_event:
