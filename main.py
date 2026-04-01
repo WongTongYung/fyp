@@ -12,7 +12,7 @@ from ultralytics import YOLO
 from database import init_db, start_match, end_match
 from server import run_server, set_status, set_stop_event, set_pause_event, set_start_callback, set_source, add_log
 from game_logic import game_logic_thread
-from calibration import get_court
+from calibration import get_court, compute_homography
 
 # Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
 torch.set_num_threads(2)
@@ -135,7 +135,8 @@ def run_pipeline(source):
         court_poly, net_line = court_result
     else:
         court_poly, net_line = None, None
-    court_container = {"poly": court_poly, "net": net_line, "lock": threading.Lock()}
+    H = compute_homography(court_poly, net=net_line) if court_poly is not None else None
+    court_container = {"poly": court_poly, "net": net_line, "H": H, "lock": threading.Lock()}
     if court_poly is None:
         print("[Calibration] No court set — will retry automatically from live frames")
         add_log("No court set — will retry automatically")

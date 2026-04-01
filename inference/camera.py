@@ -149,13 +149,23 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
                 if not coord_queue.full():
                     coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": conf})
 
-        # Court polygon (if available)
+        # Court polygon + homography (if available)
         court_pts = None
+        H = None
         if court_container is not None:
             with court_container["lock"]:
                 poly = court_container["poly"]
+                H = court_container.get("H")
             if poly is not None:
                 court_pts = poly.tolist()
+
+        # Add real-world court coordinates to each detection
+        if H is not None:
+            from calibration import pixel_to_court
+            for det in detections:
+                cx_cm, cy_cm = pixel_to_court(det["cx"], det["cy"], H)
+                det["court_x"] = round(cx_cm, 1)
+                det["court_y"] = round(cy_cm, 1)
 
         # FPS counter
         fps_counter += 1

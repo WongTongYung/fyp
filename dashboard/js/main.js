@@ -263,10 +263,122 @@ function pollScore() {
                         lastBounce = { result: 'OUT', time: Date.now() };
                 }
             });
+
+            // Sync bounce markers for court view
+            courtBounces = data.bounces || [];
+            drawCourtView();
         })
         .catch(() => {}); // silently ignore if server not running
 }
 setInterval(pollScore, 1000);
+
+// --- Top-Down Court View ---
+const courtCanvas = document.getElementById('courtViewCanvas');
+const courtCtx = courtCanvas.getContext('2d');
+let courtBounces = [];       // synced from score_state.bounces
+let currentBallCourt = null; // {x, y} in cm, from SSE detections
+
+// Court dimensions in cm
+const CW = 609.6, CL = 1341.12, NET_Y = 670.56;
+const KITCHEN_NEAR = 457.2, KITCHEN_FAR = 883.92, CENTER_X = 304.8;
+
+function drawCourtView() {
+    const W = courtCanvas.width = courtCanvas.offsetWidth;
+    const H = courtCanvas.height = courtCanvas.offsetHeight || 200;
+
+    // Scale court to fit canvas with margin
+    const margin = 10;
+    const scaleX = (W - margin * 2) / CW;
+    const scaleY = (H - margin * 2) / CL;
+    const sc = Math.min(scaleX, scaleY);
+    const ox = (W - CW * sc) / 2;
+    const oy = (H - CL * sc) / 2;
+
+    function c2c(cx, cy) { return [ox + cx * sc, oy + cy * sc]; }
+
+    // Background
+    courtCtx.fillStyle = '#2e7d32';
+    courtCtx.fillRect(0, 0, W, H);
+
+    // Court surface
+    var tl = c2c(0, 0);
+    courtCtx.fillStyle = '#388e3c';
+    courtCtx.fillRect(tl[0], tl[1], CW * sc, CL * sc);
+
+    // Draw lines helper
+    function drawLine(x1, y1, x2, y2, color, width) {
+        var a = c2c(x1, y1), b = c2c(x2, y2);
+        courtCtx.strokeStyle = color || '#fff';
+        courtCtx.lineWidth = width || 2;
+        courtCtx.beginPath();
+        courtCtx.moveTo(a[0], a[1]);
+        courtCtx.lineTo(b[0], b[1]);
+        courtCtx.stroke();
+    }
+
+    // Court boundary
+    drawLine(0, 0, CW, 0);       // top baseline
+    drawLine(0, CL, CW, CL);     // bottom baseline
+    drawLine(0, 0, 0, CL);       // left sideline
+    drawLine(CW, 0, CW, CL);     // right sideline
+
+    // Kitchen lines
+    drawLine(0, KITCHEN_NEAR, CW, KITCHEN_NEAR);
+    drawLine(0, KITCHEN_FAR, CW, KITCHEN_FAR);
+
+    // Net (thicker)
+    drawLine(0, NET_Y, CW, NET_Y, '#ddd', 3);
+
+    // Center service lines
+    drawLine(CENTER_X, 0, CENTER_X, KITCHEN_NEAR);
+    drawLine(CENTER_X, KITCHEN_FAR, CENTER_X, CL);
+
+    // Zone labels
+    courtCtx.fillStyle = 'rgba(255,255,255,0.5)';
+    courtCtx.font = 'bold ' + Math.max(10, 14 * sc) + 'px sans-serif';
+    courtCtx.textAlign = 'center';
+    courtCtx.textBaseline = 'middle';
+    var labels = [
+        ['P1', CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['P2', CENTER_X + CENTER_X / 2, KITCHEN_NEAR / 2],
+        ['Kitchen', CENTER_X, (KITCHEN_NEAR + NET_Y) / 2],
+        ['Kitchen', CENTER_X, (NET_Y + KITCHEN_FAR) / 2],
+        ['P3', CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+        ['P4', CENTER_X + CENTER_X / 2, (KITCHEN_FAR + CL) / 2],
+    ];
+    for (var i = 0; i < labels.length; i++) {
+        var p = c2c(labels[i][1], labels[i][2]);
+        courtCtx.fillText(labels[i][0], p[0], p[1]);
+    }
+
+    // Bounce markers
+    for (var j = 0; j < courtBounces.length; j++) {
+        var b = courtBounces[j];
+        var bp = c2c(b.court_x, b.court_y);
+        courtCtx.beginPath();
+        courtCtx.arc(bp[0], bp[1], 5, 0, Math.PI * 2);
+        courtCtx.fillStyle = b.result === 'IN' ? '#66bb6a' : '#ef5350';
+        courtCtx.fill();
+        courtCtx.strokeStyle = '#fff';
+        courtCtx.lineWidth = 1;
+        courtCtx.stroke();
+    }
+
+    // Current ball position
+    if (currentBallCourt) {
+        var bp2 = c2c(currentBallCourt.x, currentBallCourt.y);
+        courtCtx.beginPath();
+        courtCtx.arc(bp2[0], bp2[1], 7, 0, Math.PI * 2);
+        courtCtx.fillStyle = '#ffeb3b';
+        courtCtx.fill();
+        courtCtx.strokeStyle = '#333';
+        courtCtx.lineWidth = 2;
+        courtCtx.stroke();
+    }
+}
+
+// Initial draw
+drawCourtView();
 
 // --- Detection overlay via Server-Sent Events (SSE) ---
 const canvas = document.getElementById('overlayCanvas');
@@ -277,9 +389,20 @@ const detSource = new EventSource('/detections');
 detSource.onmessage = function (e) {
     if (!isRunning) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+        currentBallCourt = null;
+        drawCourtView();
         return;
     }
-    drawOverlay(JSON.parse(e.data));
+    var data = JSON.parse(e.data);
+    drawOverlay(data);
+
+    // Update ball position on court view
+    if (data.detections.length > 0 && data.detections[0].court_x !== undefined) {
+        currentBallCourt = { x: data.detections[0].court_x, y: data.detections[0].court_y };
+    } else {
+        currentBallCourt = null;
+    }
+    drawCourtView();
 };
 
 function drawOverlay(data) {

@@ -384,6 +384,47 @@ def get_court_half(cx, cy, court_poly, net_line=None):
     return "near" if cross >= 0 else "far"
 
 
+# ─────────────────────────────────────────────
+# Homography — pixel ↔ real-world court coords
+# ─────────────────────────────────────────────
+
+# Pickleball court dimensions in cm
+COURT_W = 609.6      # 20ft width
+COURT_L = 1341.12    # 44ft length
+NET_Y   = 670.56     # net at center (22ft)
+KITCHEN_NEAR = 457.2  # 15ft
+KITCHEN_FAR  = 883.92 # 29ft
+CENTER_X = 304.8      # 10ft (center service line)
+
+
+def compute_homography(corners, net=None):
+    """Compute pixel→court homography from calibration points.
+    corners: 4 points [TL, TR, BR, BL] in pixel coords.
+    net: 2 points [net_left, net_right] in pixel coords, or None.
+    Returns H (3x3 ndarray).
+    """
+    dst_corners = np.array([
+        [0, 0], [COURT_W, 0], [COURT_W, COURT_L], [0, COURT_L]
+    ], dtype=np.float32)
+
+    if net is not None and len(net) >= 2:
+        src = np.vstack([corners[:4], net[:2]]).astype(np.float32)
+        dst = np.vstack([dst_corners,
+                         [[0, NET_Y], [COURT_W, NET_Y]]]).astype(np.float32)
+        H, _ = cv2.findHomography(src, dst)
+    else:
+        H = cv2.getPerspectiveTransform(
+            corners[:4].astype(np.float32), dst_corners)
+    return H
+
+
+def pixel_to_court(px, py, H):
+    """Transform a pixel coordinate to court coordinates (cm)."""
+    pt = np.array([[[px, py]]], dtype=np.float64)
+    out = cv2.perspectiveTransform(pt, H)
+    return float(out[0][0][0]), float(out[0][0][1])
+
+
 def calibration_thread(calib_queue, court_container, stop_event):
     """
     Background thread — keeps trying _detect_court_auto() on incoming frames

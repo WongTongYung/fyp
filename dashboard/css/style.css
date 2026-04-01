@@ -30,13 +30,18 @@ body {
     font-weight: bold;
 }
 
-/* Main Layout: 2x2 Grid */
+/* Main Layout: 3-row Grid */
 .grid-container {
     display: grid;
     grid-template-columns: 2fr 1fr;
-    grid-template-rows: 3fr 1fr;
+    grid-template-rows: 3fr 1fr 1fr;
     gap: 15px;
     height: calc(100vh - 120px);
+}
+
+/* Controls span rows 2+3 on the right */
+.controls {
+    grid-row: 2 / 4;
 }
 
 .container {
@@ -257,4 +262,24 @@ body {
 .btn-toggle.active {
     background-color: #333;
     color: #fff;
+}
+
+/* Court Top-Down View */
+.court-view-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.court-view-section h3 {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+#courtViewCanvas {
+    flex: 1;
+    border: 2px solid #333;
+    background-color: #2e7d32;
+    display: block;
+    width: 100%;
 }

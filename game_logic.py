@@ -1,8 +1,8 @@
 import queue
 import time
 from database import log_event, log_score
-from server import update_score, add_log, get_setup_config
-from calibration import is_in_court, get_court_half
+from server import update_score, add_log, get_setup_config, add_bounce
+from calibration import is_in_court, get_court_half, pixel_to_court
 
 
 # --- Pickleball scoring rules ---
@@ -37,11 +37,13 @@ class GameState:
         self.bounce_cooldown = 0       # prevent double-counting a bounce
 
     def _get_court(self):
-        """Return (court_poly, net_line) or (None, None)."""
+        """Return (court_poly, net_line, H) or (None, None, None)."""
         if self.court_container is None:
-            return None, None
+            return None, None, None
         with self.court_container["lock"]:
-            return self.court_container["poly"], self.court_container.get("net")
+            return (self.court_container["poly"],
+                    self.court_container.get("net"),
+                    self.court_container.get("H"))
 
     def _push(self, event_type, cx=None, cy=None, conf=None, notes=None):
         """Log to DB and dashboard. Does NOT push score — call update_score() only when score changes."""
@@ -116,7 +118,7 @@ class GameState:
                     and direction == 'up'
                     and self.bounce_cooldown == 0):
                 bx, by = self.prev_cx, self.prev_cy
-                court_poly, net_line = self._get_court()
+                court_poly, net_line, H = self._get_court()
                 if court_poly is not None:
                     in_court = is_in_court(bx, by, court_poly)
                     result = "IN" if in_court else "OUT"
@@ -126,6 +128,10 @@ class GameState:
                         "cx": bx, "cy": by,
                     })
                     self.rally_active = True
+                    # Push bounce to top-down court view
+                    if H is not None:
+                        cx_cm, cy_cm = pixel_to_court(bx, by, H)
+                        add_bounce(cx_cm, cy_cm, result)
                 else:
                     result = "unknown"
                 self._push("bounce", cx=bx, cy=by, conf=conf,

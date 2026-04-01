@@ -20,6 +20,7 @@ score_state = {
     "team_far": "Team B",   # name for the far-side team
     "status": "idle",   # idle | live | stopped
     "log": [],          # recent events
+    "bounces": [],      # bounce markers for top-down court view
     "source": None,     # current video source path (None for webcam)
     "frame_pos": 0,     # current frame index in the video
     "fps": 30,          # fps of the current source
@@ -133,6 +134,17 @@ def add_log(message):
         score_state["log"] = score_state["log"][-50:]  # keep last 50 entries
 
 
+def add_bounce(court_x, court_y, result):
+    """Push a bounce marker (court coords in cm) for the top-down view."""
+    with _lock:
+        score_state["bounces"].append({
+            "court_x": round(court_x, 1),
+            "court_y": round(court_y, 1),
+            "result": result,
+        })
+        score_state["bounces"] = score_state["bounces"][-50:]
+
+
 def set_status(status):
     """Set status: 'idle', 'live', or 'stopped'."""
     with _lock:
@@ -168,6 +180,7 @@ def reset_score_state(config=None):
         score_state["team_far"] = "Team B"
         score_state["status"] = "idle"
         score_state["log"] = []
+        score_state["bounces"] = []
         score_state["frame_pos"] = 0
         if config:
             for k in _SETUP_KEYS:
