@@ -18,8 +18,8 @@ from calibration import get_court, compute_homography
 torch.set_num_threads(2)
 torch.backends.cudnn.benchmark = True
 
-model = YOLO("models/yolo11m-custom.pt")
-#model = YOLO("models/yolo11n.pt")
+from config import BALL_MODEL_PATH
+model = YOLO(BALL_MODEL_PATH)
 model.to("cuda")
 
 

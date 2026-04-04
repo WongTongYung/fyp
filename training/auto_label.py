@@ -14,7 +14,11 @@ import glob
 from ultralytics import YOLO
 
 
-def auto_label(frames_dir="training/frames", model_path="models/yolo11m-custom.pt", conf=0.3):
+def auto_label(frames_dir="training/frames", model_path=None, conf=0.3):
+    if model_path is None:
+        import sys; sys.path.insert(0, ".")
+        from config import BALL_MODEL_PATH
+        model_path = BALL_MODEL_PATH
     """Run inference on extracted frames and save YOLO-format labels."""
 
     if not os.path.exists(model_path):

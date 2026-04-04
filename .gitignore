@@ -14,6 +14,7 @@ runs/
 
 # Extracted frames (generated, large)
 training/frames/
+training/frames_TrainSet/
 
 # Dataset directories (large)
 training/dataset/

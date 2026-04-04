@@ -109,14 +109,17 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
 
         frame_h, frame_w = frame.shape[:2]
 
+        # Run detection on the full frame (no court-region cropping)
+        inference_frame = frame
+
         # Run YOLO — prefer track() for ByteTrack; fall back to predict() if lap missing
         try:
             if _use_track:
-                results = model.track(frame, conf=0.5, verbose=False, imgsz=640,
+                results = model.track(inference_frame, conf=0.5, verbose=False, imgsz=640,
                                       device="cuda", half=True, persist=True,
                                       tracker="bytetrack.yaml")
             else:
-                results = model.predict(frame, conf=0.5, verbose=False, imgsz=640,
+                results = model.predict(inference_frame, conf=0.5, verbose=False, imgsz=640,
                                         device="cuda", half=True)
         except Exception as e:
             if _use_track and "lap" in str(e).lower():
@@ -127,12 +130,20 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
 
         # Extract detections as JSON-serializable dicts
         detections = []
+        frame_h_det, frame_w_det = inference_frame.shape[:2]
         for result in results:
             if result.boxes is None or len(result.boxes) == 0:
                 continue
             for box in result.boxes:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().tolist()
                 conf = box.conf[0].item()
+
+                # Skip detections too large to be a ball (lights, logos, screens)
+                box_w = (x2 - x1) / frame_w_det
+                box_h = (y2 - y1) / frame_h_det
+                if box_w > 0.03 or box_h > 0.03:
+                    continue
+
                 cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
 
                 det = {

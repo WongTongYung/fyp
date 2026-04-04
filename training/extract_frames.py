@@ -27,7 +27,7 @@ def extract_frames(video_path="styles/FixedCamera.mp4", every_n=10):
     fps = cap.get(cv2.CAP_PROP_FPS)
     print(f"Video: {video_path}")
     print(f"Total frames: {total_frames}, FPS: {fps:.1f}, Duration: {total_frames/fps:.1f}s")
-    print(f"Extracting every {every_n}th frame → ~{total_frames // every_n} images")
+    print(f"Extracting every {every_n}th frame -> ~{total_frames // every_n} images")
     print(f"Output: {output_dir}/")
 
     count = 0
