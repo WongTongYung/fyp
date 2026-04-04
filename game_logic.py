@@ -137,9 +137,9 @@ class GameState:
         self.ball_history = []
         self.score_cooldown_until = time.monotonic() + 3.0  # ignore toss-backs for 3s
 
-    def process_coord(self, cx, cy, conf):
+    def process_coord(self, cx, cy, conf, predicted=False):
         """
-        Called for every ball detection.
+        Called for every ball detection (real or Kalman-predicted).
         Tracks velocity for serve detection and vertical direction for bounces.
         """
         self.last_seen_time = time.monotonic()
@@ -184,7 +184,8 @@ class GameState:
             # the current frame where the ball has already started rising.
             if (self.prev_direction_y == 'down'
                     and direction == 'up'
-                    and self.bounce_cooldown == 0):
+                    and self.bounce_cooldown == 0
+                    and not predicted):
                 bx, by = self.prev_cx, self.prev_cy
                 court_poly, net_line, H = self._get_court()
                 if court_poly is not None:
@@ -253,7 +254,8 @@ def game_logic_thread(coord_queue, stop_event, match_id, court_container,
     while not stop_event.is_set():
         try:
             data = coord_queue.get(timeout=1)
-            state.process_coord(data["cx"], data["cy"], data["conf"])
+            state.process_coord(data["cx"], data["cy"], data["conf"],
+                                predicted=data.get("predicted", False))
         except queue.Empty:
             if stop_event.is_set():
                 break

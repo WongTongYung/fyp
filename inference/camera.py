@@ -1,6 +1,7 @@
 import queue
 import time
 from server import push_frame, set_frame_pos, push_detections
+from ball_tracker import BallKalmanTracker
 
 # --- Thread Functions ---
 
@@ -100,6 +101,7 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
     fps_display = 0.0
     fps_timer = time.time()
     _use_track = True   # flips to False if lap is not installed
+    tracker = BallKalmanTracker(dt=1.0, process_noise=100.0, measurement_noise=5.0)
 
     while not stop_event.is_set():
         try:
@@ -157,8 +159,42 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
 
                 detections.append(det)
 
+        # Feed the best detection (highest confidence) into the Kalman filter
+        if detections:
+            best = max(detections, key=lambda d: d["conf"])
+            fcx, fcy = tracker.process_detection(best["cx"], best["cy"], best["conf"])
+            # Tag every YOLO detection with source label for the overlay
+            for det in detections:
+                det["source"] = "YOLO"
+            if not coord_queue.full():
+                coord_queue.put_nowait({
+                    "cx": fcx, "cy": fcy, "conf": best["conf"],
+                    "predicted": False,
+                })
+            # Only log when Kalman correction is significant (>2px shift)
+            shift = ((best['cx'] - fcx)**2 + (best['cy'] - fcy)**2)**0.5
+            if shift > 2:
+                print(f"[Track] YOLO    ({best['cx']:.0f},{best['cy']:.0f}) -> Kalman ({fcx:.0f},{fcy:.0f})  shift={shift:.1f}px")
+        else:
+            # YOLO missed this frame — use Kalman prediction to bridge the gap
+            pred = tracker.process_miss()
+            if pred is not None:
+                pcx, pcy = pred
+                decay_conf = max(0.1, 0.5 - 0.08 * tracker.miss_count)
+                # Add predicted detection to the list so browser overlay shows it
+                detections.append({
+                    "x1": pcx - 8, "y1": pcy - 8,
+                    "x2": pcx + 8, "y2": pcy + 8,
+                    "cx": pcx, "cy": pcy,
+                    "conf": decay_conf,
+                    "source": "Kalman",
+                })
                 if not coord_queue.full():
-                    coord_queue.put_nowait({"cx": cx, "cy": cy, "conf": conf})
+                    coord_queue.put_nowait({
+                        "cx": pcx, "cy": pcy, "conf": decay_conf,
+                        "predicted": True,
+                    })
+                print(f"[Track] Kalman  predicted ({pcx:.0f},{pcy:.0f})  conf={decay_conf:.2f}  miss={tracker.miss_count}")
 
         # Court polygon + homography (if available)
         court_pts = None

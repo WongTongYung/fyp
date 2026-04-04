@@ -444,27 +444,36 @@ function drawOverlay(data) {
         const bw = (det.x2 - det.x1) * scale;
         const bh = (det.y2 - det.y1) * scale;
 
+        // Color: green for YOLO, orange for Kalman prediction
+        const isKalman = det.source === 'Kalman';
+        const color = isKalman ? '#ff8800' : '#00ff00';
+
         // Box
-        ctx.strokeStyle = '#00ff00';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 2;
+        if (isKalman) {
+            ctx.setLineDash([4, 4]);  // dashed box for predictions
+        }
         ctx.strokeRect(x1, y1, bw, bh);
+        ctx.setLineDash([]);
 
         // Center dot
         const cx = det.cx * scale + offsetX;
         const cy = det.cy * scale + offsetY;
         ctx.beginPath();
         ctx.arc(cx, cy, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#00ff00';
+        ctx.fillStyle = color;
         ctx.fill();
 
-        // Label: track ID + confidence
+        // Label: source + track ID + confidence
+        const srcTag = isKalman ? 'KF ' : '';
         const idStr = det.id !== undefined ? '#' + det.id + ' ' : '';
-        const label = idStr + (det.conf * 100).toFixed(0) + '%';
+        const label = srcTag + idStr + (det.conf * 100).toFixed(0) + '%';
         ctx.font = 'bold 13px monospace';
         const tw = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(x1, y1 - 18, tw + 8, 18);
-        ctx.fillStyle = '#00ff00';
+        ctx.fillStyle = color;
         ctx.fillText(label, x1 + 4, y1 - 4);
     }
 
