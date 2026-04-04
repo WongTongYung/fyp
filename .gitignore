@@ -12,7 +12,11 @@
 # Training runs (large outputs)
 runs/
 
-# Dataset directories (if large)
+# Extracted frames (generated, large)
+training/frames/
+
+# Dataset directories (large)
+training/dataset/
 Pickleball*/
 
 # Python
