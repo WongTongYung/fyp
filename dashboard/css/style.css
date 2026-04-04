@@ -42,7 +42,7 @@ body {
 /* Explicit grid placement */
 .video-section   { grid-row: 1; grid-column: 1; }
 .scoreboard      { grid-row: 1; grid-column: 2; }
-.log-section     { grid-row: 2; grid-column: 1; }
+.log-section     { grid-row: 2; grid-column: 1; overflow: hidden; min-height: 0; }
 .controls        { grid-row: 2; grid-column: 2; overflow-y: auto; }
 
 .container {

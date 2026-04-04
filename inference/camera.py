@@ -112,11 +112,11 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
         # Run YOLO — prefer track() for ByteTrack; fall back to predict() if lap missing
         try:
             if _use_track:
-                results = model.track(frame, conf=0.3, verbose=False, imgsz=640,
+                results = model.track(frame, conf=0.5, verbose=False, imgsz=640,
                                       device="cuda", half=True, persist=True,
                                       tracker="bytetrack.yaml")
             else:
-                results = model.predict(frame, conf=0.3, verbose=False, imgsz=640,
+                results = model.predict(frame, conf=0.5, verbose=False, imgsz=640,
                                         device="cuda", half=True)
         except Exception as e:
             if _use_track and "lap" in str(e).lower():
