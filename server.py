@@ -4,83 +4,103 @@ import time
 import json
 import cv2
 import logging
+from multiprocessing.shared_memory import SharedMemory
+
+from ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
+                 MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
+                 MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
+                 read_frame)
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
 
-# Shared score state — updated by game logic engine, read by dashboard
+# Shared score state — updated by ipc_recv_thread, read by dashboard
 score_state = {
     "serving": 0,
     "receiving": 0,
     "server": 1,
-    "server_side": "near",  # which physical side the serving team is on
-    "mode": "doubles",      # "singles" or "doubles"
-    "team_near": "Team A",  # name for the near-side team
-    "team_far": "Team B",   # name for the far-side team
-    "status": "idle",   # idle | live | stopped
-    "log": [],          # recent events
-    "bounces": [],      # bounce markers for top-down court view
-    "source": None,     # current video source path (None for webcam)
-    "frame_pos": 0,     # current frame index in the video
-    "fps": 30,          # fps of the current source
+    "server_side": "near",
+    "mode": "doubles",
+    "team_near": "Team A",
+    "team_far": "Team B",
+    "status": "idle",
+    "log": [],
+    "bounces": [],
+    "source": None,
+    "frame_pos": 0,
+    "fps": 30,
 }
 _lock = threading.Lock()
-_stop_event = None
-_pause_event = None
-_start_callback = None
-_pipeline_thread = None
+
+# IPC references — set by init_display_process()
+_cmd_queue = None
+_state_queue = None
+_shm_name = None
+_shm_lock = None
 
 
-def set_stop_event(event):
-    global _stop_event
-    _stop_event = event
+# --- MJPEG Streaming ---
 
-
-def set_pause_event(event):
-    global _pause_event
-    _pause_event = event
-
-
-def set_start_callback(cb):
-    global _start_callback
-    _start_callback = cb
-
-
-# Shared latest frame for MJPEG streaming
 _frame = None
 _frame_lock = threading.Lock()
-_frame_event = threading.Event()   # signals when a new frame is available
-_STREAM_FPS = 30                   # cap: browsers decode MJPEG in CPU, 30fps is smooth at any window size
+_frame_event = threading.Event()
+_STREAM_FPS = 30
 _last_push_time = 0.0
 
-
-def push_frame(frame):
-    """Called by capture/processing to share the latest frame. Rate-limited to _STREAM_FPS."""
-    global _frame, _last_push_time
-    now = time.time()
-    if now - _last_push_time < 1.0 / _STREAM_FPS:
-        return   # drop this frame — too soon since last stream update
-    _last_push_time = now
-    with _frame_lock:
-        _frame = frame
-    _frame_event.set()   # wake up the stream generator
+# Pre-encoded JPEG buffer
+_jpeg_buffer = None
+_jpeg_lock = threading.Lock()
+_jpeg_event = threading.Event()
 
 
-def _generate_frames():
-    """Generator that yields JPEG frames for MJPEG stream."""
+def _jpeg_encoder_thread():
+    """Background thread that continuously encodes the latest frame to JPEG."""
     last_frame = None
     while True:
-        _frame_event.wait(timeout=1.0)   # sleep until a new frame arrives
+        _frame_event.wait(timeout=1.0)
         _frame_event.clear()
         with _frame_lock:
             frame = _frame
         if frame is None or frame is last_frame:
             continue
         last_frame = frame
-        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+        h, w = frame.shape[:2]
+        max_w = 480
+        if w > max_w:
+            scale = max_w / w
+            frame = cv2.resize(frame, (max_w, int(h * scale)))
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+        jpeg_bytes = buffer.tobytes()
+        global _jpeg_buffer
+        with _jpeg_lock:
+            _jpeg_buffer = jpeg_bytes
+        _jpeg_event.set()
+
+
+def push_frame(frame):
+    """Accept a frame for MJPEG streaming. Rate-limited to _STREAM_FPS."""
+    global _frame, _last_push_time
+    now = time.time()
+    if now - _last_push_time < 1.0 / _STREAM_FPS:
+        return
+    _last_push_time = now
+    with _frame_lock:
+        _frame = frame
+    _frame_event.set()
+
+
+def _generate_frames():
+    """Generator that yields pre-encoded JPEG frames for MJPEG stream."""
+    while True:
+        _jpeg_event.wait(timeout=1.0)
+        _jpeg_event.clear()
+        with _jpeg_lock:
+            jpeg = _jpeg_buffer
+        if jpeg is None:
+            continue
         yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+               b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
 
 
 # --- Detection overlay via SSE ---
@@ -117,8 +137,9 @@ def _generate_detections():
         yield f'data: {payload}\n\n'
 
 
+# --- Score state management (called locally by ipc_recv_thread) ---
+
 def update_score(serving, receiving, server, server_side=None):
-    """Called by game logic engine to push a score update."""
     with _lock:
         score_state["serving"] = serving
         score_state["receiving"] = receiving
@@ -128,14 +149,12 @@ def update_score(serving, receiving, server, server_side=None):
 
 
 def add_log(message):
-    """Called by game logic engine to push a log entry."""
     with _lock:
         score_state["log"].append(message)
-        score_state["log"] = score_state["log"][-50:]  # keep last 50 entries
+        score_state["log"] = score_state["log"][-50:]
 
 
 def add_bounce(court_x, court_y, result):
-    """Push a bounce marker (court coords in cm) for the top-down view."""
     with _lock:
         score_state["bounces"].append({
             "court_x": round(court_x, 1),
@@ -146,7 +165,6 @@ def add_bounce(court_x, court_y, result):
 
 
 def add_serve(court_x, court_y, side):
-    """Push a serve event (court coords in cm) for the top-down view."""
     with _lock:
         score_state["bounces"].append({
             "court_x": round(court_x, 1),
@@ -158,19 +176,16 @@ def add_serve(court_x, court_y, side):
 
 
 def set_status(status):
-    """Set status: 'idle', 'live', or 'stopped'."""
     with _lock:
         score_state["status"] = status
 
 
 def set_source(source):
-    """Store the current source path so dashboard can use it for rewind."""
     with _lock:
         score_state["source"] = source if source != 0 else None
 
 
 def set_frame_pos(frame_pos, fps):
-    """Called by capture_thread to report current playback position."""
     with _lock:
         score_state["frame_pos"] = frame_pos
         score_state["fps"] = fps
@@ -181,7 +196,6 @@ _SETUP_KEYS = ("serving", "receiving", "server", "server_side",
 
 
 def reset_score_state(config=None):
-    """Reset score_state to defaults, optionally applying setup config."""
     with _lock:
         score_state["serving"] = 0
         score_state["receiving"] = 0
@@ -201,9 +215,97 @@ def reset_score_state(config=None):
 
 
 def get_setup_config():
-    """Read setup fields under lock — called by GameState at init."""
     with _lock:
         return {k: score_state[k] for k in _SETUP_KEYS}
+
+
+# --- IPC Receiver Thread ---
+
+def _ipc_recv_thread():
+    """Drains state_queue from the tracking process and updates local state."""
+    import queue as _queue
+    shm = SharedMemory(name=_shm_name, create=False)
+    last_seq = -1
+    # [DEBUG] Track IPC receive rates
+    _recv_fps_counter = 0
+    _recv_frame_counter = 0
+    _recv_timer = time.time()
+
+    while True:
+        try:
+            msg = _state_queue.get(timeout=0.5)
+        except _queue.Empty:
+            continue
+
+        _recv_fps_counter += 1
+        elapsed = time.time() - _recv_timer
+        if elapsed >= 2.0:
+            _recv_fps_counter = 0
+            _recv_frame_counter = 0
+            _recv_timer = time.time()
+
+        msg_type = msg.get("type")
+
+        if msg_type == MSG_FRAME_READY:
+            seq = msg.get("seq", 0)
+            if seq <= last_seq:
+                continue
+            last_seq = seq
+            _recv_frame_counter += 1
+            frame, _ = read_frame(shm, _shm_lock)
+            push_frame(frame)
+
+        elif msg_type == MSG_DETECTIONS:
+            push_detections(
+                msg["detections"], msg["frame_w"], msg["frame_h"],
+                court=msg.get("court"), det_fps=msg.get("fps", 0)
+            )
+
+        elif msg_type == MSG_SCORE_UPDATE:
+            update_score(
+                msg["serving"], msg["receiving"], msg["server"],
+                server_side=msg.get("server_side")
+            )
+
+        elif msg_type == MSG_LOG:
+            add_log(msg["message"])
+
+        elif msg_type == MSG_BOUNCE:
+            add_bounce(msg["court_x"], msg["court_y"], msg["result"])
+
+        elif msg_type == MSG_SERVE:
+            add_serve(msg["court_x"], msg["court_y"], msg["side"])
+
+        elif msg_type == MSG_STATUS:
+            set_status(msg["status"])
+
+        elif msg_type == MSG_SOURCE:
+            set_source(msg["source"])
+
+        elif msg_type == MSG_FRAME_POS:
+            set_frame_pos(msg["frame_pos"], msg["fps"])
+
+        elif msg_type == MSG_RESET:
+            reset_score_state(msg.get("config"))
+
+
+# --- IPC Initialization ---
+
+def init_display_process(cmd_queue, state_queue, shm_name, shm_lock):
+    """Initialize IPC references and start background threads. Called once in display process."""
+    global _cmd_queue, _state_queue, _shm_name, _shm_lock
+    _cmd_queue = cmd_queue
+    _state_queue = state_queue
+    _shm_name = shm_name
+    _shm_lock = shm_lock
+
+    # Start JPEG encoder thread
+    encoder_t = threading.Thread(target=_jpeg_encoder_thread, daemon=True)
+    encoder_t.start()
+
+    # Start IPC receiver thread
+    recv_t = threading.Thread(target=_ipc_recv_thread, daemon=True)
+    recv_t.start()
 
 
 # --- Routes ---
@@ -234,12 +336,15 @@ def detections_feed():
 
 @app.route('/start', methods=['POST'])
 def start():
-    global _pipeline_thread
-    if _pipeline_thread and _pipeline_thread.is_alive():
-        return jsonify({"error": "Already running"}), 409
+    # Check if already running
+    with _lock:
+        if score_state["status"] == "live":
+            return jsonify({"error": "Already running"}), 409
+
     data = request.get_json(force=True, silent=True) or {}
     source = data.get("source", 0)
-    # Extract setup config and reset state for new match
+
+    # Extract setup config
     config = {k: data[k] for k in _SETUP_KEYS if k in data}
     if "serving" in config:
         config["serving"] = int(config["serving"])
@@ -247,33 +352,35 @@ def start():
         config["receiving"] = int(config["receiving"])
     if "server" in config:
         config["server"] = int(config["server"])
+
+    # Reset local state
     reset_score_state(config)
-    if _start_callback:
-        _pipeline_thread = threading.Thread(target=_start_callback, args=(source,), daemon=True)
-        _pipeline_thread.start()
+
+    # Send start command to tracking process
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_START, "source": source, "config": config})
         return jsonify({"status": "started"})
-    return jsonify({"error": "No pipeline registered"}), 500
+    return jsonify({"error": "No IPC queue"}), 500
 
 
 @app.route('/pause', methods=['POST'])
 def pause():
-    if _pause_event:
-        _pause_event.set()
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_PAUSE})
     set_status("paused")
     return jsonify({"status": "paused"})
 
 
 @app.route('/resume', methods=['POST'])
 def resume():
-    if _pause_event:
-        _pause_event.clear()
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_RESUME})
     set_status("live")
     return jsonify({"status": "live"})
 
 
 @app.route('/update_score', methods=['POST'])
 def update_score_route():
-    """Called by the dashboard keyboard shortcuts to persist a manual score change."""
     data = request.get_json(force=True, silent=True) or {}
     with _lock:
         score_state["serving"]   = int(data.get("serving",  score_state["serving"]))
@@ -288,7 +395,6 @@ def update_score_route():
 
 @app.route('/swap_side', methods=['POST'])
 def swap_side():
-    """Toggle which physical side the serving team is on."""
     with _lock:
         cur = score_state["server_side"]
         score_state["server_side"] = "far" if cur == "near" else "near"
@@ -297,10 +403,8 @@ def swap_side():
 
 @app.route('/stop', methods=['POST'])
 def stop():
-    if _pause_event:
-        _pause_event.clear()  # clear pause before stopping threads
-    if _stop_event:
-        _stop_event.set()
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_STOP})
     set_status("stopped")
     return jsonify({"status": "stopped"})
 
@@ -381,7 +485,6 @@ def analysis_data(match_id):
                                    net=np.array(net, dtype=np.float32) if net else None)
     except Exception:
         pass
-    # Convert pixel bounce coordinates to court coordinates (cm)
     if H is not None:
         for b in bounces:
             if b.get("cx") is not None and b.get("cy") is not None:
@@ -415,5 +518,5 @@ def js(filename):
 
 
 def run_server():
-    """Run Flask in a background thread (used by main.py)."""
+    """Run Flask — called in the display process."""
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

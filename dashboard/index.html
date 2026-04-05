@@ -6,9 +6,9 @@
     <title>Pickleball Point Counting System</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
 
-    <!-- Header -->
+<body>
+    <!-- Title with clock -->
     <header class="header">
         <h1>PICKLEBALL POINT COUNTING SYSTEM</h1>
         <span id="clock" class="clock"></span>
@@ -19,7 +19,10 @@
 
         <!-- Top Left: Video Feed + Court View side by side -->
         <div class="container video-section">
-            <span id="status" class="status">(Status: Idle)</span>
+            <div class="video-header">
+                <span id="status" class="status">(Status: Idle)</span>
+                <span class="court-view-label">Court View</span>
+            </div>
             <div class="video-court-row">
                 <div class="video-feed" id="videoFeed">
                     <img id="liveFeed" src="/video_feed" alt="Live Feed">
@@ -35,61 +38,59 @@
         <!-- Top Right: Scoreboard -->
         <div class="container scoreboard">
             <h3>Scoreboard</h3>
-            <div class="score-card">
+            <div class="score-card team-a">
                 <span class="score-label" id="servingLabel">Team A</span>
-                <span class="score-value" id="servingScore">00</span>
+                <div class="score-adjust">
+                    <button class="btn-adjust" id="servingMinus">−</button>
+                    <span class="score-value" id="servingScore">00</span>
+                    <button class="btn-adjust" id="servingPlus">+</button>
+                </div>
             </div>
             <div class="server-indicator">
-                Server #<span id="serverNumber">1</span>
-                &nbsp;|&nbsp; Side: <span id="serverSide">near</span>
+                <button class="btn-adjust btn-adjust-sm" id="serverMinus">−</button>
+                <span><span id="serverNumLabel">Server #<span id="serverNumber">1</span> &nbsp;|&nbsp; </span>Side: <span id="serverSide">near</span> &nbsp;|&nbsp; <span class="mode-badge" id="modeBadge">Doubles</span></span>
+                <button class="btn-adjust btn-adjust-sm" id="serverPlus">+</button>
             </div>
-            <div class="score-card">
+            <div class="score-card team-b">
                 <span class="score-label" id="receivingLabel">Team B</span>
-                <span class="score-value" id="receivingScore">00</span>
+                <div class="score-adjust">
+                    <button class="btn-adjust" id="receivingMinus">−</button>
+                    <span class="score-value" id="receivingScore">00</span>
+                    <button class="btn-adjust" id="receivingPlus">+</button>
+                </div>
             </div>
         </div>
 
-        <!-- Bottom Left: Log + Settings -->
+        <!-- Bottom Left: Log + Live Stats -->
         <div class="container log-section">
-            <div class="log-settings-row">
+            <div class="log-stats-row">
                 <div class="log-panel">
-                    <h3>Log</h3>
+                    <h3 class="log-title">Log</h3>
                     <div class="log-box" id="logBox"></div>
                 </div>
-                <div class="settings-panel">
-                    <h3>Settings</h3>
-                    <div class="source-input">
-                        <label for="sourceInput">Source:</label>
-                        <input type="text" id="sourceInput" value="styles/FixedCamera.mp4" placeholder="video path or 0 for webcam">
-                    </div>
-                    <div class="setup-row">
-                        <label>Mode:</label>
-                        <button class="btn btn-toggle" data-mode="singles">Singles</button>
-                        <button class="btn btn-toggle active" data-mode="doubles">Doubles</button>
-                    </div>
-                    <div class="setup-row">
-                        <label>Serving Side:</label>
-                        <button class="btn btn-toggle active" data-side="near">Near</button>
-                        <button class="btn btn-toggle" data-side="far">Far</button>
-                    </div>
-                    <div class="setup-row" id="serverNumRow">
-                        <label>Server #:</label>
-                        <button class="btn btn-toggle active" data-srv="1">1</button>
-                        <button class="btn btn-toggle" data-srv="2">2</button>
-                    </div>
-                    <div class="setup-row">
-                        <label>Near Team:</label>
-                        <input type="text" id="teamNear" value="Team A" class="setup-input">
-                    </div>
-                    <div class="setup-row">
-                        <label>Far Team:</label>
-                        <input type="text" id="teamFar" value="Team B" class="setup-input">
-                    </div>
-                    <div class="setup-row">
-                        <label>Start Score:</label>
-                        <input type="number" id="startServing" value="0" min="0" class="setup-input-sm">
-                        <span>-</span>
-                        <input type="number" id="startReceiving" value="0" min="0" class="setup-input-sm">
+                <div class="stats-panel">
+                    <h3 class="log-title">Live Stats</h3>
+                    <div class="live-stats" id="liveStats">
+                        <div class="live-stat">
+                            <span class="live-stat-value" id="statTotalPts">0</span>
+                            <span class="live-stat-label">Points</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="live-stat-value" id="statSideOuts">0</span>
+                            <span class="live-stat-label">Side Outs</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="live-stat-value live-stat-in" id="statIn">0</span>
+                            <span class="live-stat-label">IN</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="live-stat-value live-stat-out" id="statOut">0</span>
+                            <span class="live-stat-label">OUT</span>
+                        </div>
+                        <div class="live-stat">
+                            <span class="live-stat-value live-stat-serve" id="statServe">0</span>
+                            <span class="live-stat-label">Serves</span>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -104,14 +105,47 @@
             </div>
             <div class="control-buttons">
                 <button id="rewindBtn" class="btn btn-rewind">Rewind</button>
+                <button class="btn" id="matchHistoryBtn" type="button">Match History</button>
             </div>
             <div class="control-buttons">
-                <a href="/matches" style="text-decoration:none;">
-                    <button class="btn" type="button">Match History</button>
-                </a>
+                <button class="btn btn-settings" id="settingsBtn">Settings</button>
             </div>
         </div>
 
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Settings</h3>
+                <button class="btn-close" id="closeSettings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="source-input">
+                    <label for="sourceInput">Source:</label>
+                    <input type="text" id="sourceInput" value="styles/FixedCamera.mp4" placeholder="video path or 0 for webcam">
+                </div>
+                <div class="setup-row">
+                    <label>Mode:</label>
+                    <button class="btn btn-toggle" data-mode="singles">Singles</button>
+                    <button class="btn btn-toggle active" data-mode="doubles">Doubles</button>
+                </div>
+                <div class="setup-row">
+                    <label>Serving Side:</label>
+                    <button class="btn btn-toggle active" data-side="near">Near</button>
+                    <button class="btn btn-toggle" data-side="far">Far</button>
+                </div>
+                <div class="setup-row">
+                    <label>Near Team:</label>
+                    <input type="text" id="teamNear" value="Team A" class="setup-input">
+                </div>
+                <div class="setup-row">
+                    <label>Far Team:</label>
+                    <input type="text" id="teamFar" value="Team B" class="setup-input">
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="js/main.js"></script>

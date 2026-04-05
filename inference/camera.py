@@ -1,57 +1,71 @@
 import queue
 import time
-from server import push_frame, set_frame_pos, push_detections
 from ball_tracker import BallKalmanTracker
+from ipc import MSG_FRAME_READY, MSG_FRAME_POS, MSG_DETECTIONS, write_frame
 
 # --- Thread Functions ---
 
-def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queue=None, static_frame=None, pause_event=None):
+def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
+                   calib_queue=None, static_frame=None, pause_event=None,
+                   state_queue=None, shm=None, shm_lock=None):
     """
     Reads frames from the camera and:
-      - pushes raw frames to the MJPEG stream (push_frame)
+      - writes raw frames to shared memory for the display process
       - queues frames for YOLO processing and video saving
     """
     print("Starting capture thread...")
-    # Boost capture thread priority so iVCam gets served faster
+
+    # set high thread priority by calling Windows API directly
     try:
         import ctypes
         ctypes.windll.kernel32.SetThreadPriority(-2, 2)  # THREAD_PRIORITY_HIGHEST
     except Exception:
         pass
-    frame_delay = 1.0 / fps if fps > 0 else 1.0 / 30
+
+    # Rate limit for sending frames to the display process
+    _STREAM_FPS = 30
+    _last_push_time = 0.0
+    _frame_seq = 0
+
+    def _push_frame(frame):
+        """Write frame to shared memory and notify display process."""
+        nonlocal _last_push_time, _frame_seq
+        now = time.time()
+        if now - _last_push_time < 1.0 / _STREAM_FPS:
+            return
+        _last_push_time = now
+        if shm is not None and state_queue is not None:
+            _frame_seq += 1
+            write_frame(shm, shm_lock, frame, _frame_seq)
+            try:
+                state_queue.put_nowait({"type": MSG_FRAME_READY, "seq": _frame_seq})
+            except queue.Full:
+                pass
 
     if static_frame is not None:
         while not stop_event.is_set():
             if pause_event and pause_event.is_set():
                 time.sleep(0.1)
                 continue
-            push_frame(static_frame)
+            _push_frame(static_frame)
             if not save_queue.full():
                 save_queue.put(static_frame)
             if not process_queue.full():
                 process_queue.put(static_frame)
             if calib_queue is not None and not calib_queue.full():
                 calib_queue.put_nowait(static_frame)
-            time.sleep(frame_delay)
+            time.sleep(1.0 / fps if fps > 0 else 1.0 / 30)
         print("Capture thread stopped.")
         return
 
-    frame_delay = 1.0 / fps if fps > 0 else 0
     frame_count = 0
     report_fps = fps if fps > 0 else 30
-    cap_fps_counter = 0
-    cap_fps_timer = time.time()
     while not stop_event.is_set():
         if pause_event and pause_event.is_set():
             time.sleep(0.1)
             continue
 
         ret, frame = cap.read()
-        cap_fps_counter += 1
-        if time.time() - cap_fps_timer >= 2.0:
-            print(f"[Capture] cap.read() FPS: {cap_fps_counter / (time.time() - cap_fps_timer):.1f}")
-            cap_fps_counter = 0
-            cap_fps_timer = time.time()
         if not ret:
             print("Failed to grab frame, stopping.")
             stop_event.set()
@@ -59,21 +73,36 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0, calib_queu
 
         frame_count += 1
         if frame_count % 30 == 0:
-            set_frame_pos(frame_count, report_fps)
+            if state_queue is not None:
+                try:
+                    state_queue.put_nowait({
+                        "type": MSG_FRAME_POS,
+                        "frame_pos": frame_count,
+                        "fps": report_fps,
+                    })
+                except queue.Full:
+                    pass
 
-        push_frame(frame)  # raw frame → MJPEG stream
+        _push_frame(frame)
 
-        if not save_queue.full():
-            save_queue.put(frame)
+        try:
+            save_queue.put_nowait(frame)
+        except queue.Full:
+            pass
 
-        if not process_queue.full():
-            process_queue.put(frame)
+        try:
+            process_queue.put_nowait(frame)
+        except queue.Full:
+            pass
 
-        if calib_queue is not None and not calib_queue.full():
-            calib_queue.put_nowait(frame)
+        if calib_queue is not None:
+            try:
+                calib_queue.put_nowait(frame)
+            except queue.Full:
+                pass
 
-        if frame_delay:
-            time.sleep(frame_delay)
+        # No sleep — cap.read() already blocks at the camera's native rate.
+        # Adding sleep here would reduce throughput below the camera FPS.
 
     print("Capture thread stopped.")
 
@@ -90,11 +119,12 @@ def save_thread(out, save_queue, stop_event):
             continue
     print("Save thread stopped.")
 
-def processing_thread(process_queue, stop_event, model, coord_queue, court_container=None):
+def processing_thread(process_queue, stop_event, model, coord_queue,
+                      court_container=None, state_queue=None):
     """
     YOLO inference thread.
-    Extracts detection coordinates and pushes them via SSE (push_detections)
-    instead of drawing on the frame — the browser canvas handles the overlay.
+    Extracts detection coordinates and sends them to the display process
+    via state_queue — the browser canvas handles the overlay.
     """
     print("Starting processing thread...")
     fps_counter = 0
@@ -111,7 +141,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
 
         frame_h, frame_w = frame.shape[:2]
 
-        # Run detection on the full frame (no court-region cropping)
         inference_frame = frame
 
         # Run YOLO — prefer track() for ByteTrack; fall back to predict() if lap missing
@@ -140,7 +169,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().tolist()
                 conf = box.conf[0].item()
 
-                # Skip detections too large to be a ball (lights, logos, screens)
                 box_w = (x2 - x1) / frame_w_det
                 box_h = (y2 - y1) / frame_h_det
                 if box_w > 0.03 or box_h > 0.03:
@@ -153,7 +181,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
                     "cx": cx, "cy": cy, "conf": conf,
                 }
 
-                # Track ID (assigned by ByteTrack, persists across frames)
                 if box.id is not None:
                     det["id"] = int(box.id[0].item())
 
@@ -163,7 +190,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
         if detections:
             best = max(detections, key=lambda d: d["conf"])
             fcx, fcy = tracker.process_detection(best["cx"], best["cy"], best["conf"])
-            # Tag every YOLO detection with source label for the overlay
             for det in detections:
                 det["source"] = "YOLO"
             if not coord_queue.full():
@@ -171,17 +197,12 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
                     "cx": fcx, "cy": fcy, "conf": best["conf"],
                     "predicted": False,
                 })
-            # Only log when Kalman correction is significant (>2px shift)
-            shift = ((best['cx'] - fcx)**2 + (best['cy'] - fcy)**2)**0.5
-            if shift > 2:
-                print(f"[Track] YOLO    ({best['cx']:.0f},{best['cy']:.0f}) -> Kalman ({fcx:.0f},{fcy:.0f})  shift={shift:.1f}px")
+
         else:
-            # YOLO missed this frame — use Kalman prediction to bridge the gap
             pred = tracker.process_miss()
             if pred is not None:
                 pcx, pcy = pred
                 decay_conf = max(0.1, 0.5 - 0.08 * tracker.miss_count)
-                # Add predicted detection to the list so browser overlay shows it
                 detections.append({
                     "x1": pcx - 8, "y1": pcy - 8,
                     "x2": pcx + 8, "y2": pcy + 8,
@@ -194,7 +215,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
                         "cx": pcx, "cy": pcy, "conf": decay_conf,
                         "predicted": True,
                     })
-                print(f"[Track] Kalman  predicted ({pcx:.0f},{pcy:.0f})  conf={decay_conf:.2f}  miss={tracker.miss_count}")
 
         # Court polygon + homography (if available)
         court_pts = None
@@ -222,7 +242,18 @@ def processing_thread(process_queue, stop_event, model, coord_queue, court_conta
             fps_counter = 0
             fps_timer = time.time()
 
-        # Push coordinates to browser via SSE — no frame drawing needed
-        push_detections(detections, frame_w, frame_h, court_pts, fps_display)
+        # Send detections to display process via state_queue
+        if state_queue is not None:
+            try:
+                state_queue.put_nowait({
+                    "type": MSG_DETECTIONS,
+                    "detections": detections,
+                    "frame_w": frame_w,
+                    "frame_h": frame_h,
+                    "court": court_pts,
+                    "fps": fps_display,
+                })
+            except queue.Full:
+                pass
 
     print("Processing thread stopped.")

@@ -1,0 +1,144 @@
+/* ── Navigation Bar ── */
+.nav-bar {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 20px;
+}
+
+.nav-link {
+    font-size: 13px;
+    text-decoration: none;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 8px 18px;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.nav-link:hover {
+    background: var(--blue-light);
+    border-color: var(--blue-border);
+    color: var(--blue);
+}
+
+.match-title {
+    font-size: 18px;
+    font-weight: 700;
+}
+
+
+/* ── Stats Summary Row ── */
+.stat-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 20px 14px;
+    text-align: center;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+    transition: var(--transition);
+}
+
+.stat-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+.stat-value {
+    display: block;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--blue);
+}
+
+.stat-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin-top: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+
+/* ── Main Grid (Bounce Map + Score Chart) ── */
+.main-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.panel {
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 20px;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow);
+}
+
+.panel h3 {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+}
+
+
+/* ── Bounce Map Canvas ── */
+#courtCanvas {
+    display: block;
+    width: 100%;
+    max-height: 500px;
+    border-radius: var(--radius-sm);
+}
+
+
+/* ── Score Chart ── */
+.chart-wrap {
+    position: relative;
+    height: 340px;
+}
+
+
+/* ── Legend ── */
+.legend {
+    display: flex;
+    gap: 18px;
+    font-size: 12px;
+    margin-top: 10px;
+    color: var(--text-secondary);
+}
+
+.legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+
+/* ── Empty State ── */
+.empty-msg {
+    color: var(--text-muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 40px 0;
+}

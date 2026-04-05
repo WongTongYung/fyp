@@ -1,0 +1,135 @@
+PICKLEBALL SYSTEM - PERFORMANCE NOTES
+======================================
+Last updated: 2026-04-05
+
+
+========================================================================
+FYP PRESENTATION - SIMPLE EXPLANATION
+========================================================================
+
+THE PROBLEM
+-----------
+The laptop has 2 GPUs:
+  - Intel UHD (weak, integrated) -- handles screen display + iVCam camera decoding
+  - NVIDIA RTX 4050 (powerful)   -- handles YOLO AI inference
+
+When nothing is visible on the laptop screen (all windows minimized),
+Windows automatically puts the Intel GPU into "sleep mode" to save power.
+But iVCam needs the Intel GPU to be awake to decode camera frames from the
+phone. Result: camera frame rate drops from 60fps to 17fps.
+
+This also explains why WiFi camera mode was slower than USB -- WiFi relies
+more heavily on the Intel GPU's media decoder. Once the GPU is kept awake,
+both WiFi and USB perform equally well at 60fps.
+
+HOW WE DISCOVERED IT
+---------------------
+1. Observed that FPS was stable at 60 when VSCode was visible on screen
+2. FPS dropped to ~17 when VSCode was minimized -- even with no browser open
+3. Checked GPU usage: Intel iGPU at 99% when browser was open, but dropped
+   to near-idle when everything was minimized
+4. Realized: VSCode (being a graphical app) was keeping the Intel GPU active.
+   When minimized, nothing kept it active, so Windows put it to sleep.
+5. Confirmed: the slowdown was in cap.read() itself (the camera driver level),
+   not in our Python code, queues, or threading
+
+THE SOLUTION
+------------
+Two OS-level optimizations (implemented in win_perf.py):
+
+1. Keep the Intel GPU awake
+   - Create a tiny invisible 1x1 pixel window that refreshes 10 times/second
+   - Like leaving a small "night light" on so the GPU doesn't fall asleep
+   - Negligible overhead -- just 1 pixel being redrawn
+   - Function: keep_igpu_alive()
+
+2. Tell Windows "don't slow down this app"
+   - Windows 11 automatically throttles background apps to save battery
+   - We set three flags to prevent this:
+     a) Request fast timer resolution (1ms instead of default 15.6ms)
+     b) Disable power throttling (prevents Windows from slowing our CPU)
+     c) Set high process priority (ensures consistent scheduling)
+   - Function: win32_perf_setup()
+
+RESULT
+------
+Before fix: 60fps only when VSCode visible, 17fps when minimized
+After fix:  60fps always, regardless of what's on screen
+Bonus:      WiFi camera mode now works as well as USB mode
+
+
+FOR THE FYP REPORT
+------------------
+Suggested paragraph:
+
+  "During testing, the system experienced significant frame rate degradation
+  (60fps to 17fps) when no application window was visible on the laptop
+  screen. Investigation revealed this was caused by Windows 11 power
+  management transitioning the Intel integrated GPU into a low-power state.
+  Since iVCam's virtual camera relies on the Intel GPU's hardware media
+  decoder to deliver frames, this power state change directly throttled
+  the camera capture pipeline.
+
+  Two OS-level optimizations were implemented to resolve this:
+  (1) a lightweight background rendering task that prevents the Intel GPU
+  from entering low-power mode, and (2) process-level flags that disable
+  Windows power throttling and ensure consistent CPU scheduling priority.
+  These fixes maintained a stable 60fps capture rate regardless of the
+  foreground application state, and additionally resolved a performance
+  gap between WiFi and USB camera connections."
+
+
+========================================================================
+TECHNICAL DETAILS (FOR REFERENCE)
+========================================================================
+
+ARCHITECTURE
+------------
+The system uses 2 processes:
+  Process 1 (Main):   Camera capture + YOLO inference + game logic
+  Process 2 (Display): Flask server + MJPEG streaming + WebSocket
+
+This split prevents Flask's JPEG encoding from blocking cap.read() via
+Python's GIL (Global Interpreter Lock). Without it, streaming to any
+client would drop capture FPS from 60 to ~20.
+
+Why 2 processes instead of threads?
+  - Python threads share one GIL -- only one thread runs Python code at a time
+  - JPEG encoding in Flask would block the camera capture thread
+  - Separate processes have separate GILs, so they run truly in parallel
+
+
+GPU USAGE
+---------
+  Intel UHD (iGPU):  iVCam decoding, Windows desktop compositing
+  NVIDIA RTX 4050:   YOLO inference (CUDA), runs at ~45% utilization
+
+The YOLO model is loaded ONLY in Process 1. Process 2 (display) does NOT
+import torch/CUDA, so it doesn't waste GPU memory or compete for CUDA.
+
+
+DEPLOYMENT SETUP
+----------------
+Recommended architecture for court deployment:
+
+  [Phone/Camera] --> WiFi --> [Laptop (Processing)] --> WiFi --> [Court Dashboard]
+                               - YOLO + Tracking                 - Any device with browser
+                               - Flask server                    - http://<laptop-ip>:5000
+                               - No browser needed               - Scoreboard, video, stats
+                               - 60fps capture
+
+The laptop runs headlessly (no browser open). The court dashboard is a
+separate device (tablet, TV, another laptop) on the same WiFi network.
+Since rendering happens on the dashboard device's GPU, the laptop's
+resources are 100% dedicated to camera capture and YOLO inference.
+
+
+KEY FILES
+---------
+  main.py              - Entry point, process management
+  win_perf.py          - Windows GPU/power fixes (keep_igpu_alive, win32_perf_setup)
+  inference/camera.py  - Capture thread, YOLO processing thread, save thread
+  server.py            - Flask server, MJPEG streaming, WebSocket, IPC receiver
+  ipc.py               - Shared memory IPC between processes
+  game_logic.py        - Scoring, serve tracking, rally detection
+  config.py            - Model paths, constants

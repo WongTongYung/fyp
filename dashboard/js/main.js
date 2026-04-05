@@ -41,6 +41,14 @@ function updateScoreboard() {
     document.getElementById('receivingLabel').textContent = receivingName + ' (Receiving)';
 }
 
+function updateModeUI() {
+    var isSingles = gameMode === 'singles';
+    document.getElementById('modeBadge').textContent = isSingles ? 'Singles' : 'Doubles';
+    document.getElementById('serverNumLabel').style.display = isSingles ? 'none' : '';
+    document.getElementById('serverMinus').style.display = isSingles ? 'none' : '';
+    document.getElementById('serverPlus').style.display = isSingles ? 'none' : '';
+}
+
 // --- Log ---
 function addLog(message) {
     const logBox = document.getElementById('logBox');
@@ -58,8 +66,7 @@ function initToggles() {
             document.querySelectorAll('[data-mode]').forEach(function (b) { b.classList.remove('active'); });
             btn.classList.add('active');
             gameMode = btn.dataset.mode;
-            // Hide server # row in singles mode
-            document.getElementById('serverNumRow').style.display = gameMode === 'singles' ? 'none' : '';
+            updateModeUI();
         });
     });
     document.querySelectorAll('[data-side]').forEach(function (btn) {
@@ -71,15 +78,19 @@ function initToggles() {
             updateScoreboard();
         });
     });
-    document.querySelectorAll('[data-srv]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            document.querySelectorAll('[data-srv]').forEach(function (b) { b.classList.remove('active'); });
-            btn.classList.add('active');
-            setupServerNum = parseInt(btn.dataset.srv);
-        });
-    });
 }
 initToggles();
+
+// --- Settings modal ---
+document.getElementById('settingsBtn').addEventListener('click', function () {
+    document.getElementById('settingsModal').classList.add('active');
+});
+document.getElementById('closeSettings').addEventListener('click', function () {
+    document.getElementById('settingsModal').classList.remove('active');
+});
+document.getElementById('settingsModal').addEventListener('click', function (e) {
+    if (e.target === this) this.classList.remove('active');
+});
 
 // Update labels when team name inputs change
 document.getElementById('teamNear').addEventListener('input', updateScoreboard);
@@ -111,8 +122,8 @@ document.getElementById('startBtn').addEventListener('click', function () {
                 mode: gameMode,
                 team_near: (document.getElementById('teamNear').value.trim()) || 'Team A',
                 team_far:  (document.getElementById('teamFar').value.trim())  || 'Team B',
-                serving:   parseInt(document.getElementById('startServing').value)  || 0,
-                receiving: parseInt(document.getElementById('startReceiving').value) || 0
+                serving:   0,
+                receiving: 0
             })
         })
         .then(r => r.json())
@@ -136,6 +147,16 @@ document.getElementById('stopBtn').addEventListener('click', function () {
         .then(r => r.json())
         .then(() => addLog('Camera paused.'))
         .catch(err => addLog('Pause failed: ' + err));
+});
+
+document.getElementById('matchHistoryBtn').addEventListener('click', function () {
+    if (isRunning) {
+        fetch('/pause', { method: 'POST' })
+            .then(() => { window.location.href = '/matches'; })
+            .catch(() => { window.location.href = '/matches'; });
+    } else {
+        window.location.href = '/matches';
+    }
 });
 
 document.getElementById('rewindBtn').addEventListener('click', function () {
@@ -188,6 +209,54 @@ function postScore(log) {
     }).catch(() => {});
 }
 
+// --- Score adjustment buttons ---
+document.getElementById('servingPlus').addEventListener('click', function () {
+    servingScore++;
+    updateScoreboard();
+    const msg = 'Manual +1 Server. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+document.getElementById('servingMinus').addEventListener('click', function () {
+    if (servingScore <= 0) return;
+    servingScore--;
+    updateScoreboard();
+    const msg = 'Manual -1 Server. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+document.getElementById('receivingPlus').addEventListener('click', function () {
+    receivingScore++;
+    updateScoreboard();
+    const msg = 'Manual +1 Receiver. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+document.getElementById('receivingMinus').addEventListener('click', function () {
+    if (receivingScore <= 0) return;
+    receivingScore--;
+    updateScoreboard();
+    const msg = 'Manual -1 Receiver. Score ' + servingScore + '-' + receivingScore + '-' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+
+// --- Server number adjustment buttons ---
+document.getElementById('serverPlus').addEventListener('click', function () {
+    serverNumber = serverNumber === 1 ? 2 : 1;
+    updateScoreboard();
+    const msg = 'Manual switch Server #' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+document.getElementById('serverMinus').addEventListener('click', function () {
+    serverNumber = serverNumber === 1 ? 2 : 1;
+    updateScoreboard();
+    const msg = 'Manual switch Server #' + serverNumber;
+    addLog(msg);
+    postScore(msg);
+});
+
 document.addEventListener('keydown', function (e) {
     if (!isRunning) return;
 
@@ -224,6 +293,29 @@ document.addEventListener('keydown', function (e) {
     }
 });
 
+// --- Live Stats ---
+function updateLiveStats(data) {
+    document.getElementById('statTotalPts').textContent = servingScore + receivingScore;
+
+    // Count side outs from log entries
+    var sideOuts = 0;
+    data.log.forEach(function (msg) {
+        if (msg.toLowerCase().indexOf('side') !== -1 && msg.toLowerCase().indexOf('out') !== -1) sideOuts++;
+    });
+    document.getElementById('statSideOuts').textContent = sideOuts;
+
+    // Count bounces by result
+    var inCount = 0, outCount = 0, serveCount = 0;
+    courtBounces.forEach(function (b) {
+        if (b.result === 'IN') inCount++;
+        else if (b.result === 'OUT') outCount++;
+        else if (b.result === 'SERVE') serveCount++;
+    });
+    document.getElementById('statIn').textContent = inCount;
+    document.getElementById('statOut').textContent = outCount;
+    document.getElementById('statServe').textContent = serveCount;
+}
+
 // --- Poll Flask /score every second ---
 function pollScore() {
     fetch('/score')
@@ -253,16 +345,20 @@ function pollScore() {
                 window.close();
             }
 
-            // Append new server-side log entries (tracked separately from JS-only addLog calls)
+            // Append new server-side log entries
+            // If server trimmed the log (length shrank), reset our pointer
+            if (data.log.length < _serverLogCount) {
+                _serverLogCount = data.log.length;
+            }
             data.log.slice(_serverLogCount).forEach(msg => {
                 addLog(msg);
                 _serverLogCount++;
-                // Pick up bounce IN/OUT events for the canvas overlay
             });
 
             // Sync bounce markers for court view
             courtBounces = data.bounces || [];
             drawCourtView();
+            updateLiveStats(data);
         })
         .catch(() => {}); // silently ignore if server not running
 }
