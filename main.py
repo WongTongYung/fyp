@@ -18,7 +18,7 @@ from calibration import get_court, compute_homography
 from config import BALL_MODEL_PATH
 from ipc import (SHM_SIZE, SHM_NAME,
                  MSG_STATUS, MSG_SOURCE, MSG_LOG,
-                 CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME)
+                 CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND)
 from win_perf import win32_perf_setup, keep_igpu_alive
 
 # Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
@@ -44,7 +44,7 @@ def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     run_server()
 
 
-def cmd_listener_thread(cmd_queue, stop_event, pause_event):
+def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None):
     """Translates IPC commands from display process into local threading.Events."""
     while not stop_event.is_set():
         try:
@@ -59,6 +59,12 @@ def cmd_listener_thread(cmd_queue, stop_event, pause_event):
             pause_event.set()
         elif cmd_type == CMD_RESUME:
             pause_event.clear()
+            if rewind_event:
+                rewind_event.clear()
+        elif cmd_type == CMD_REWIND:
+            pause_event.set()
+            if rewind_event:
+                rewind_event.set()
 
 
 def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=None):
@@ -73,9 +79,10 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     process_queue = queue.Queue(maxsize=4)
     coord_queue = queue.Queue(maxsize=64)
 
-    # Events to signal threads to stop or pause
+    # Events to signal threads to stop, pause, or flush video for rewind
     stop_event = threading.Event()
     pause_event = threading.Event()
+    rewind_event = threading.Event()
 
     # Send source to display process
     _send(state_queue, {"type": MSG_SOURCE, "source": source})
@@ -191,7 +198,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         fps if is_file else 0, calib_queue, static_frame, pause_event,
         state_queue, shm, shm_lock,
     ))
-    t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event))
+    t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event, rewind_event, fps))
     t3 = threading.Thread(target=processing_thread, args=(
         process_queue, stop_event, model, coord_queue, court_container,
         state_queue,
@@ -201,7 +208,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         state_queue, setup_config,
     ))
     t_cmd = threading.Thread(target=cmd_listener_thread, args=(
-        cmd_queue, stop_event, pause_event,
+        cmd_queue, stop_event, pause_event, rewind_event,
     ), daemon=True)
 
     _send(state_queue, {"type": MSG_STATUS, "status": "live"})

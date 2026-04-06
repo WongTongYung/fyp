@@ -161,42 +161,34 @@ document.getElementById('matchHistoryBtn').addEventListener('click', function ()
 
 document.getElementById('rewindBtn').addEventListener('click', function () {
     if (!isRunning) return;
-    fetch('/pause', { method: 'POST' })
+
+    // Send rewind command — pauses capture and writes a new rewind clip
+    fetch('/rewind', { method: 'POST' })
         .then(r => r.json())
-        .then(() => addLog('Camera paused.'))
-        .catch(err => addLog('Pause failed: ' + err));
+        .then(() => {
+            addLog('Camera paused for rewind.');
+            const pollClip = setInterval(function () {
+                fetch('/rewind_status')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.ready) return;
+                        clearInterval(pollClip);
 
-    fetch('/score')
-        .then(r => r.json())
-        .then(data => {
-            const src = data.source;
-            if (!src) { addLog('Rewind: no file source (webcam mode).'); return; }
-
-            const currentTimeSec = data.frame_pos / data.fps;
-            const REWIND_SEC = 10;
-            const seekTo = Math.max(0, currentTimeSec - REWIND_SEC);
-
-            const live = document.getElementById('liveFeed');
-            const rewind = document.getElementById('rewindFeed');
-            rewind.src = '/' + src.replace(/\\/g, '/');
-            live.style.display = 'none';
-            rewind.style.display = 'block';
-
-            rewind.onloadedmetadata = function () {
-                rewind.currentTime = seekTo;
-                rewind.play();
-            };
-
-            addLog('Rewind: seeking to ' + seekTo.toFixed(1) + 's (current: ' + currentTimeSec.toFixed(1) + 's)');
-        });
+                        const live = document.getElementById('liveFeed');
+                        // Break the old MJPEG stream by clearing src first
+                        live.src = '';
+                        // Start fresh rewind stream (timestamp forces new request)
+                        live.src = '/rewind_feed?t=' + Date.now();
+                        addLog('Rewind: playing last 15 seconds...');
+                    });
+            }, 300);
+        })
+        .catch(err => addLog('Rewind failed: ' + err));
 });
 
 function switchToLiveFeed() {
     const live = document.getElementById('liveFeed');
-    const rewind = document.getElementById('rewindFeed');
-    rewind.pause();
-    rewind.style.display = 'none';
-    live.style.display = 'block';
+    live.src = '/video_feed';
 }
 
 // --- Keyboard shortcuts for testing scores ---

@@ -106,18 +106,64 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
 
     print("Capture thread stopped.")
 
-def save_thread(out, save_queue, stop_event):
-    """Thread function to save frames to a file."""
+def save_thread(out, save_queue, stop_event, rewind_event=None, fps=30):
+    """Thread function to save frames to a file.
+
+    Keeps a rolling buffer of the last ~15 seconds of JPEG-compressed frames.
+    When *rewind_event* is set, writes the buffer to a separate rewind clip
+    file that the browser can play immediately — the main recording is never
+    interrupted.
+    """
+    import cv2
+    from collections import deque
+
+    REWIND_BUF_SEC = 15
+    buf_max = max(REWIND_BUF_SEC * (fps if fps > 0 else 30), 1)
+    frame_buffer = deque(maxlen=buf_max)
+
     print("Starting save thread...")
+    _clip_written = False
+    _frame_size = None
     while not stop_event.is_set() or not save_queue.empty():
+        # When rewind is triggered, write the buffered frames to a clip
+        if rewind_event is not None and rewind_event.is_set():
+            if not _clip_written and _frame_size:
+                _write_rewind_clip(frame_buffer, fps, _frame_size)
+                _clip_written = True
+            time.sleep(0.1)
+            continue
+        _clip_written = False
+
         try:
             frame = save_queue.get(timeout=1)
+            _frame_size = (frame.shape[1], frame.shape[0])
             out.write(frame)
+            # Buffer a JPEG-compressed copy for rewind
+            _, jpg = cv2.imencode('.jpg', frame)
+            frame_buffer.append(jpg)
         except queue.Empty:
             if stop_event.is_set():
                 break
             continue
     print("Save thread stopped.")
+
+
+def _write_rewind_clip(frame_buffer, fps, frame_size):
+    """Dump JPEG frames to a binary file for MJPEG streaming.
+
+    Format: [uint32 count][uint32 fps] then for each frame [uint32 size][jpeg bytes]
+    """
+    import struct
+
+    clip_path = 'styles/rewind_clip.bin'
+    count = len(frame_buffer)
+    with open(clip_path, 'wb') as f:
+        f.write(struct.pack('<II', count, fps))
+        for jpg in frame_buffer:
+            data = jpg.tobytes()
+            f.write(struct.pack('<I', len(data)))
+            f.write(data)
+    print(f"[Save] Rewind clip written: {count} frames to {clip_path}")
 
 def processing_thread(process_queue, stop_event, model, coord_queue,
                       court_container=None, state_queue=None):

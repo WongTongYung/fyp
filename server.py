@@ -2,6 +2,7 @@ from flask import Flask, jsonify, render_template, send_from_directory, Response
 import threading
 import time
 import json
+import os
 import cv2
 import logging
 from multiprocessing.shared_memory import SharedMemory
@@ -9,11 +10,13 @@ from multiprocessing.shared_memory import SharedMemory
 from ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
                  MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
                  MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
-                 read_frame)
+                 CMD_REWIND, read_frame)
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
+
+_rewind_requested_at = 0.0
 
 # Shared score state — updated by ipc_recv_thread, read by dashboard
 score_state = {
@@ -371,6 +374,55 @@ def pause():
     return jsonify({"status": "paused"})
 
 
+@app.route('/rewind', methods=['POST'])
+def rewind():
+    global _rewind_requested_at
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_REWIND})
+    _rewind_requested_at = time.time()
+    set_status("paused")
+    return jsonify({"status": "paused"})
+
+
+@app.route('/rewind_status')
+def rewind_status():
+    """Check if the rewind clip has been written (file modified after request)."""
+    clip_path = os.path.join('styles', 'rewind_clip.bin')
+    ready = False
+    if os.path.exists(clip_path):
+        mtime = os.path.getmtime(clip_path)
+        ready = mtime >= _rewind_requested_at
+    return jsonify({"ready": ready})
+
+
+@app.route('/rewind_feed')
+def rewind_feed():
+    """Stream the rewind clip as MJPEG — no codec issues, works in any browser."""
+    import struct
+
+    clip_path = os.path.join('styles', 'rewind_clip.bin')
+    if not os.path.exists(clip_path):
+        return jsonify({"error": "No rewind clip"}), 404
+
+    def generate():
+        with open(clip_path, 'rb') as f:
+            header = f.read(8)
+            count, fps = struct.unpack('<II', header)
+            delay = 1.0 / fps if fps > 0 else 1.0 / 30
+            for _ in range(count):
+                size_data = f.read(4)
+                if not size_data:
+                    break
+                size = struct.unpack('<I', size_data)[0]
+                jpeg = f.read(size)
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
+                time.sleep(delay)
+
+    return Response(generate(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
 @app.route('/resume', methods=['POST'])
 def resume():
     if _cmd_queue:
@@ -504,7 +556,10 @@ def analysis_data(match_id):
 @app.route('/styles/<path:filename>')
 def styles(filename):
     mime = 'video/mp4' if filename.endswith('.mp4') else None
-    return send_from_directory('styles', filename, mimetype=mime)
+    resp = send_from_directory('styles', filename, mimetype=mime)
+    if filename.endswith('.mp4'):
+        resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 @app.route('/css/<path:filename>')
