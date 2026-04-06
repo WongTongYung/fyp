@@ -145,8 +145,8 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
             print(f"[Camera] FPS not reported, defaulting to {fps}")
         print(f"[Camera] Resolution: {frame_width}x{frame_height}, FPS: {fps}")
 
-    # Setup Video Writer
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    # Setup Video Writer (H.264 via OpenH264 — browser-playable after match ends)
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')
     out = cv2.VideoWriter('styles/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
     if not out.isOpened():
         print("Error: Could not open video writer.")
