@@ -1,4 +1,4 @@
-"""Windows performance fixes for iVCam + Intel iGPU.
+"""Windows performance fixes for DroidCam + Intel iGPU.
 
 See PERFORMANCE_NOTES.txt for full explanation.
 """
@@ -57,7 +57,7 @@ def win32_perf_setup():
 def keep_igpu_alive():
     """Prevent Intel iGPU from entering low-power state.
 
-    iVCam's virtual camera uses the Intel iGPU media engine for decoding.
+    DroidCam's virtual camera uses the Intel iGPU media engine for decoding.
     When no visible window uses the iGPU for rendering, Windows puts it into
     a low-power D-state, causing cap.read() to slow from 60fps to ~17fps.
     This creates a tiny 1x1 hidden window with periodic redraws to keep

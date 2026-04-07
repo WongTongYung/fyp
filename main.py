@@ -10,19 +10,20 @@ import atexit
 import torch
 
 from multiprocessing.shared_memory import SharedMemory
-from inference.camera import capture_thread, save_thread, processing_thread
 from ultralytics import YOLO
+from inference.camera import capture_thread, save_thread, processing_thread
 from core.database import init_db, start_match, end_match
 from core.game_logic import game_logic_thread
 from core.calibration import get_court, compute_homography
 from config import BALL_MODEL_PATH
+from core.win_perf import win32_perf_setup, keep_igpu_alive
 from core.ipc import (SHM_SIZE, SHM_NAME,
                       MSG_STATUS, MSG_SOURCE, MSG_LOG,
                       CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
                       CMD_RECALIBRATE)
-from core.win_perf import win32_perf_setup, keep_igpu_alive
 
-# Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
+
+# Limit PyTorch CPU threads so DroidCam decoder gets more CPU headroom
 torch.set_num_threads(2)
 torch.backends.cudnn.benchmark = True
 
@@ -39,7 +40,7 @@ def _send(state_queue, msg):
 
 def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     """Entry point for Process 2 (Display). Runs Flask server."""
-    win32_perf_setup()  # Also fix timer/throttling in the display process
+    win32_perf_setup()
     from core.server import init_display_process, run_server
     init_display_process(cmd_queue, state_queue, shm_name, shm_lock)
     run_server()
@@ -274,7 +275,7 @@ def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model):
 
 
 if __name__ == "__main__":
-    # Keep Intel iGPU active so iVCam doesn't throttle when no window is visible
+    # Keep Intel iGPU active so DroidCam doesn't throttle when no window is visible
     _igpu_thread = threading.Thread(target=keep_igpu_alive, daemon=True)
     _igpu_thread.start()
 

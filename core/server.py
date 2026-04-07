@@ -1,12 +1,19 @@
-from flask import Flask, jsonify, render_template, send_from_directory, Response, request
+import json
+import logging
+import os
+import queue
+import struct
 import threading
 import time
-import json
-import os
-import cv2
-import logging
+from datetime import datetime
 from multiprocessing.shared_memory import SharedMemory
 
+import cv2
+import numpy as np
+from flask import Flask, jsonify, render_template, send_from_directory, Response, request
+
+from core.calibration import compute_homography, pixel_to_court
+from core.database import get_all_matches, get_match_summary, get_match_bounces, get_match_scores
 from core.ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
                       MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
                       MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
@@ -231,7 +238,6 @@ def get_setup_config():
 
 def _ipc_recv_thread():
     """Drains state_queue from the tracking process and updates local state."""
-    import queue as _queue
     shm = SharedMemory(name=_shm_name, create=False)
     last_seq = -1
     # [DEBUG] Track IPC receive rates
@@ -242,7 +248,7 @@ def _ipc_recv_thread():
     while True:
         try:
             msg = _state_queue.get(timeout=0.5)
-        except _queue.Empty:
+        except queue.Empty:
             continue
 
         _recv_fps_counter += 1
@@ -403,8 +409,6 @@ def rewind_status():
 @app.route('/rewind_feed')
 def rewind_feed():
     """Stream the rewind clip as MJPEG — no codec issues, works in any browser."""
-    import struct
-
     clip_path = os.path.join(_ROOT, 'styles', 'rewind', 'rewind_clip.bin')
     if not os.path.exists(clip_path):
         return jsonify({"error": "No rewind clip"}), 404
@@ -468,8 +472,6 @@ def stop():
 
 @app.route('/matches')
 def matches_list():
-    from core.database import get_all_matches
-    from datetime import datetime
     matches = get_all_matches()
     rows = ""
     for m in matches:
@@ -519,10 +521,6 @@ def analysis_page(match_id):
 
 @app.route('/api/analysis/<int:match_id>')
 def analysis_data(match_id):
-    import json as _json
-    import numpy as np
-    from core.database import get_match_summary, get_match_bounces, get_match_scores
-    from core.calibration import compute_homography, pixel_to_court
     summary = get_match_summary(match_id)
     bounces = get_match_bounces(match_id)
     scores = get_match_scores(match_id)
@@ -530,7 +528,7 @@ def analysis_data(match_id):
     H = None
     try:
         with open(COURT_FILE) as f:
-            raw = _json.load(f)
+            raw = json.load(f)
         if isinstance(raw, dict):
             court_poly = raw.get("corners")
             net = raw.get("net")

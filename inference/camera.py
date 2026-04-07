@@ -1,6 +1,13 @@
 import queue
 import time
+import os
+import struct
+import ctypes
+import cv2
+from collections import deque
+
 from core.ball_tracker import BallKalmanTracker
+from core.calibration import pixel_to_court
 from core.ipc import MSG_FRAME_READY, MSG_FRAME_POS, MSG_DETECTIONS, write_frame
 
 # --- Thread Functions ---
@@ -17,7 +24,6 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
 
     # set high thread priority by calling Windows API directly
     try:
-        import ctypes
         ctypes.windll.kernel32.SetThreadPriority(-2, 2)  # THREAD_PRIORITY_HIGHEST
     except Exception:
         pass
@@ -60,6 +66,8 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
 
     frame_count = 0
     report_fps = fps if fps > 0 else 30
+    frame_interval = 1.0 / fps if fps > 0 else 0
+    next_frame_time = time.time()
     while not stop_event.is_set():
         if pause_event and pause_event.is_set():
             time.sleep(0.1)
@@ -101,8 +109,13 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
             except queue.Full:
                 pass
 
-        # No sleep — cap.read() already blocks at the camera's native rate.
-        # Adding sleep here would reduce throughput below the camera FPS.
+        # Throttle to real-time when reading from a video file
+        # (cap.read() returns instantly for files, but blocks for live cameras)
+        if frame_interval > 0:
+            next_frame_time += frame_interval
+            sleep_time = next_frame_time - time.time()
+            if sleep_time > 0:
+                time.sleep(sleep_time)
 
     print("Capture thread stopped.")
 
@@ -114,9 +127,6 @@ def save_thread(out, save_queue, stop_event, rewind_event=None, fps=30):
     file that the browser can play immediately — the main recording is never
     interrupted.
     """
-    import cv2
-    from collections import deque
-
     REWIND_BUF_SEC = 15
     buf_max = max(REWIND_BUF_SEC * (fps if fps > 0 else 30), 1)
     frame_buffer = deque(maxlen=buf_max)
@@ -153,11 +163,8 @@ def _write_rewind_clip(frame_buffer, fps, frame_size):
 
     Format: [uint32 count][uint32 fps] then for each frame [uint32 size][jpeg bytes]
     """
-    import struct
-
-    import os as _os
-    _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    clip_path = _os.path.join(_root, 'styles', 'rewind', 'rewind_clip.bin')
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    clip_path = os.path.join(_root, 'styles', 'rewind', 'rewind_clip.bin')
     count = len(frame_buffer)
     with open(clip_path, 'wb') as f:
         f.write(struct.pack('<II', count, fps))
@@ -194,11 +201,11 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
         # Run YOLO — prefer track() for ByteTrack; fall back to predict() if lap missing
         try:
             if _use_track:
-                results = model.track(inference_frame, conf=0.5, verbose=False, imgsz=640,
+                results = model.track(inference_frame, conf=0.4, verbose=False, imgsz=640,
                                       device="cuda", half=True, persist=True,
                                       tracker="bytetrack.yaml")
             else:
-                results = model.predict(inference_frame, conf=0.5, verbose=False, imgsz=640,
+                results = model.predict(inference_frame, conf=0.4, verbose=False, imgsz=640,
                                         device="cuda", half=True)
         except Exception as e:
             if _use_track and "lap" in str(e).lower():
@@ -276,7 +283,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
 
         # Add real-world court coordinates to each detection
         if H is not None:
-            from core.calibration import pixel_to_court
             for det in detections:
                 cx_cm, cy_cm = pixel_to_court(det["cx"], det["cy"], H)
                 det["court_x"] = round(cx_cm, 1)
