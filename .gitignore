@@ -9,6 +9,13 @@
 *.avi
 *.mov
 
+# Binary / runtime artifacts
+*.dll
+*.db
+*.db-shm
+*.db-wal
+*.bin
+
 # Training runs (large outputs)
 runs/
 
@@ -24,5 +31,11 @@ Pickleball*/
 __pycache__/
 *.pyc
 *.pyo
+
+# Environment
 .env
 venv/
+
+# OS
+Thumbs.db
+.DS_Store
