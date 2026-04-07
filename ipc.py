@@ -37,6 +37,7 @@ CMD_STOP = "stop"
 CMD_PAUSE = "pause"
 CMD_RESUME = "resume"
 CMD_REWIND = "rewind"
+CMD_RECALIBRATE = "recalibrate"
 
 
 def write_frame(shm, lock, frame, seq):

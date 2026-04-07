@@ -155,7 +155,7 @@ def _write_rewind_clip(frame_buffer, fps, frame_size):
     """
     import struct
 
-    clip_path = 'styles/rewind_clip.bin'
+    clip_path = 'styles/rewind/rewind_clip.bin'
     count = len(frame_buffer)
     with open(clip_path, 'wb') as f:
         f.write(struct.pack('<II', count, fps))

@@ -18,7 +18,8 @@ from calibration import get_court, compute_homography
 from config import BALL_MODEL_PATH
 from ipc import (SHM_SIZE, SHM_NAME,
                  MSG_STATUS, MSG_SOURCE, MSG_LOG,
-                 CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND)
+                 CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
+                 CMD_RECALIBRATE)
 from win_perf import win32_perf_setup, keep_igpu_alive
 
 # Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
@@ -44,7 +45,8 @@ def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     run_server()
 
 
-def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None):
+def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None,
+                        court_container=None, state_queue=None):
     """Translates IPC commands from display process into local threading.Events."""
     while not stop_event.is_set():
         try:
@@ -65,6 +67,19 @@ def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None):
             pause_event.set()
             if rewind_event:
                 rewind_event.set()
+        elif cmd_type == CMD_RECALIBRATE and court_container is not None:
+            from calibration import load_court, compute_homography
+            loaded = load_court()
+            if loaded is not None:
+                corners, net = loaded
+                H = compute_homography(corners, net=net)
+                with court_container["lock"]:
+                    court_container["poly"] = corners
+                    court_container["net"] = net
+                    court_container["H"] = H
+                print("[Calibration] Court reloaded from browser calibration")
+                if state_queue:
+                    _send(state_queue, {"type": MSG_LOG, "message": "Court recalibrated from browser"})
 
 
 def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=None):
@@ -147,7 +162,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
 
     # Setup Video Writer (H.264 via OpenH264 — browser-playable after match ends)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    out = cv2.VideoWriter('styles/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
+    out = cv2.VideoWriter('styles/rewind/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
     if not out.isOpened():
         print("Error: Could not open video writer.")
         _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video writer."})
@@ -170,8 +185,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
             cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     # Court calibration
-    calib_cap = cap if is_file else None
-    court_result = get_court(first_frame, cap=calib_cap, start_pos=0)
+    court_result = get_court(first_frame)
     if is_file and cap is not None:
         cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
     if court_result is not None:
@@ -209,6 +223,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     ))
     t_cmd = threading.Thread(target=cmd_listener_thread, args=(
         cmd_queue, stop_event, pause_event, rewind_event,
+        court_container, state_queue,
     ), daemon=True)
 
     _send(state_queue, {"type": MSG_STATUS, "status": "live"})

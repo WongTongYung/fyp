@@ -634,3 +634,15 @@ body {
 .modal-body .setup-row:last-child {
     margin-bottom: 0;
 }
+
+/* Calibrate button */
+.btn-calibrate {
+    background-color: #fff3e0;
+    border-color: #ffcc80;
+    color: #e65100;
+}
+
+.btn-calibrate:hover {
+    background-color: #ffe0b2;
+    border-color: #ffb74d;
+}

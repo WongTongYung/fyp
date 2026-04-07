@@ -627,5 +627,173 @@ function drawOverlay(data) {
     }
 }
 
+// --- Calibration Modal ---
+(function () {
+    const LABELS = ['TL', 'TR', 'BR', 'BL', 'Net-L', 'Net-R'];
+    const COLORS = ['#00ff00', '#00ff00', '#00ff00', '#00ff00', '#ffeb3b', '#ffeb3b'];
+    let calibPoints = [];
+    let calibImg = null;
+
+    const modal = document.getElementById('calibrateModal');
+    const cvs = document.getElementById('calibrateCanvas');
+    const cCtx = cvs.getContext('2d');
+    const statusEl = document.getElementById('calibrateStatus');
+
+    function updateStatus() {
+        if (!calibImg) {
+            statusEl.textContent = 'Click "Capture" to grab a frame';
+        } else if (calibPoints.length < 6) {
+            statusEl.textContent = 'Click point ' + (calibPoints.length + 1) + '/6: ' + LABELS[calibPoints.length];
+        } else {
+            statusEl.textContent = 'All 6 points set. Click "Save" to confirm.';
+        }
+        document.getElementById('calibrateSave').disabled = calibPoints.length < 6;
+    }
+
+    function drawCalibration() {
+        if (!calibImg) return;
+        cCtx.drawImage(calibImg, 0, 0, cvs.width, cvs.height);
+
+        var scaleX = cvs.width / calibImg.naturalWidth;
+        var scaleY = cvs.height / calibImg.naturalHeight;
+
+        for (var i = 0; i < calibPoints.length; i++) {
+            var px = calibPoints[i][0] * scaleX;
+            var py = calibPoints[i][1] * scaleY;
+            // dot
+            cCtx.beginPath();
+            cCtx.arc(px, py, 12, 0, Math.PI * 2);
+            cCtx.fillStyle = COLORS[i];
+            cCtx.fill();
+            cCtx.strokeStyle = '#000';
+            cCtx.lineWidth = 3;
+            cCtx.stroke();
+            // label
+            cCtx.font = 'bold 22px monospace';
+            cCtx.fillStyle = COLORS[i];
+            cCtx.strokeStyle = '#000';
+            cCtx.lineWidth = 3;
+            cCtx.strokeText(LABELS[i], px + 16, py - 16);
+            cCtx.fillText(LABELS[i], px + 16, py - 16);
+        }
+        // Court outline
+        if (calibPoints.length >= 4) {
+            cCtx.strokeStyle = '#00ff00';
+            cCtx.lineWidth = 3;
+            cCtx.beginPath();
+            for (var j = 0; j < 4; j++) {
+                var x = calibPoints[j][0] * scaleX;
+                var y = calibPoints[j][1] * scaleY;
+                if (j === 0) cCtx.moveTo(x, y);
+                else cCtx.lineTo(x, y);
+            }
+            cCtx.closePath();
+            cCtx.stroke();
+        }
+        // Net line
+        if (calibPoints.length >= 6) {
+            cCtx.strokeStyle = '#ffeb3b';
+            cCtx.lineWidth = 3;
+            cCtx.beginPath();
+            cCtx.moveTo(calibPoints[4][0] * scaleX, calibPoints[4][1] * scaleY);
+            cCtx.lineTo(calibPoints[5][0] * scaleX, calibPoints[5][1] * scaleY);
+            cCtx.stroke();
+        }
+    }
+
+    // Canvas click — record point in original image coordinates
+    cvs.addEventListener('click', function (e) {
+        if (!calibImg || calibPoints.length >= 6) return;
+        var rect = cvs.getBoundingClientRect();
+        var clickX = e.clientX - rect.left;
+        var clickY = e.clientY - rect.top;
+        // Convert from display size to canvas backing store
+        var canvasX = clickX * (cvs.width / rect.width);
+        var canvasY = clickY * (cvs.height / rect.height);
+        // Convert to original image coordinates
+        var origX = canvasX / cvs.width * calibImg.naturalWidth;
+        var origY = canvasY / cvs.height * calibImg.naturalHeight;
+        calibPoints.push([Math.round(origX), Math.round(origY)]);
+        drawCalibration();
+        updateStatus();
+    });
+
+    // Open modal
+    document.getElementById('calibrateBtn').addEventListener('click', function () {
+        modal.classList.add('active');
+        calibPoints = [];
+        calibImg = null;
+        cCtx.clearRect(0, 0, cvs.width, cvs.height);
+        updateStatus();
+        // Auto-load existing calibration status
+        fetch('/calibrate/load').then(function (r) { return r.json(); }).then(function (data) {
+            if (data.exists) {
+                statusEl.textContent = 'Existing calibration found. Capture a new frame to recalibrate.';
+            }
+        }).catch(function () {});
+    });
+
+    // Close modal
+    document.getElementById('closeCalibrate').addEventListener('click', function () {
+        modal.classList.remove('active');
+    });
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) modal.classList.remove('active');
+    });
+
+    // Capture frame
+    document.getElementById('calibrateCapture').addEventListener('click', function () {
+        statusEl.textContent = 'Capturing frame...';
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function () {
+            calibImg = img;
+            calibPoints = [];
+            cvs.width = img.naturalWidth;
+            cvs.height = img.naturalHeight;
+            drawCalibration();
+            updateStatus();
+        };
+        img.onerror = function () {
+            statusEl.textContent = 'Failed to capture frame. Is the feed running?';
+        };
+        img.src = '/calibrate/frame?t=' + Date.now();
+    });
+
+    // Reset points
+    document.getElementById('calibrateReset').addEventListener('click', function () {
+        calibPoints = [];
+        drawCalibration();
+        updateStatus();
+    });
+
+    // Save calibration
+    document.getElementById('calibrateSave').addEventListener('click', function () {
+        if (calibPoints.length < 6) return;
+        var payload = {
+            corners: calibPoints.slice(0, 4),
+            net: calibPoints.slice(4, 6)
+        };
+        fetch('/calibrate/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (data.status === 'saved') {
+                statusEl.textContent = 'Calibration saved!';
+                addLog('Court calibration updated from browser.');
+                setTimeout(function () { modal.classList.remove('active'); }, 1000);
+            } else {
+                statusEl.textContent = 'Error: ' + (data.error || 'Unknown');
+            }
+        })
+        .catch(function (err) {
+            statusEl.textContent = 'Save failed: ' + err;
+        });
+    });
+})();
+
 // Initialize
 updateScoreboard();

@@ -10,9 +10,11 @@ from multiprocessing.shared_memory import SharedMemory
 from ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
                  MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
                  MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
-                 CMD_REWIND, read_frame)
+                 CMD_REWIND, CMD_RECALIBRATE, read_frame)
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
+
+COURT_FILE = "court.json"
 
 app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
 
@@ -387,7 +389,7 @@ def rewind():
 @app.route('/rewind_status')
 def rewind_status():
     """Check if the rewind clip has been written (file modified after request)."""
-    clip_path = os.path.join('styles', 'rewind_clip.bin')
+    clip_path = os.path.join('styles', 'rewind', 'rewind_clip.bin')
     ready = False
     if os.path.exists(clip_path):
         mtime = os.path.getmtime(clip_path)
@@ -400,7 +402,7 @@ def rewind_feed():
     """Stream the rewind clip as MJPEG — no codec issues, works in any browser."""
     import struct
 
-    clip_path = os.path.join('styles', 'rewind_clip.bin')
+    clip_path = os.path.join('styles', 'rewind', 'rewind_clip.bin')
     if not os.path.exists(clip_path):
         return jsonify({"error": "No rewind clip"}), 404
 
@@ -551,6 +553,46 @@ def analysis_data(match_id):
         "scores": scores,
         "court_poly": court_poly,
     })
+
+
+@app.route('/calibrate/frame')
+def calibrate_frame():
+    """Return a full-resolution JPEG snapshot from the live feed for calibration."""
+    with _frame_lock:
+        frame = _frame
+    if frame is None:
+        return jsonify({"error": "No frame available"}), 404
+    _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    return Response(buffer.tobytes(), mimetype='image/jpeg')
+
+
+@app.route('/calibrate/save', methods=['POST'])
+def calibrate_save():
+    """Save 6 clicked calibration points (4 corners + 2 net) to court.json."""
+    data = request.get_json(force=True, silent=True) or {}
+    corners = data.get("corners")
+    net = data.get("net")
+    if not corners or len(corners) != 4:
+        return jsonify({"error": "Need exactly 4 corner points"}), 400
+    if not net or len(net) != 2:
+        return jsonify({"error": "Need exactly 2 net points"}), 400
+    payload = {"corners": corners, "net": net}
+    with open(COURT_FILE, "w") as f:
+        json.dump(payload, f)
+    # Notify tracking process to reload court from file
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_RECALIBRATE})
+    return jsonify({"status": "saved"})
+
+
+@app.route('/calibrate/load')
+def calibrate_load():
+    """Load existing calibration from court.json if it exists."""
+    if not os.path.exists(COURT_FILE):
+        return jsonify({"exists": False})
+    with open(COURT_FILE, "r") as f:
+        data = json.load(f)
+    return jsonify({"exists": True, "corners": data.get("corners"), "net": data.get("net")})
 
 
 @app.route('/styles/<path:filename>')

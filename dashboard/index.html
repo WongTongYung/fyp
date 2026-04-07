@@ -108,6 +108,7 @@
             </div>
             <div class="control-buttons">
                 <button class="btn btn-settings" id="settingsBtn">Settings</button>
+                <button class="btn btn-calibrate" id="calibrateBtn">Calibrate</button>
             </div>
         </div>
 
@@ -142,6 +143,30 @@
                 <div class="setup-row">
                     <label>Far Team:</label>
                     <input type="text" id="teamFar" value="Team B" class="setup-input">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calibration Modal -->
+    <div class="modal-overlay" id="calibrateModal">
+        <div class="modal" style="max-width:720px;">
+            <div class="modal-header">
+                <h3>Court Calibration</h3>
+                <button class="btn-close" id="closeCalibrate">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">
+                    Click 6 points in order: <strong>TL, TR, BR, BL</strong> (court corners), then <strong>Net-L, Net-R</strong>. Press <em>Reset</em> to start over.
+                </p>
+                <div style="position:relative;background:#1a1d23;border-radius:var(--radius-sm);overflow:hidden;">
+                    <canvas id="calibrateCanvas" style="display:block;width:100%;cursor:crosshair;"></canvas>
+                </div>
+                <div style="display:flex;align-items:center;gap:8px;margin-top:12px;">
+                    <span id="calibrateStatus" style="font-size:13px;font-weight:600;color:var(--text-secondary);flex:1;">Click "Capture" to grab a frame</span>
+                    <button class="btn" id="calibrateCapture">Capture</button>
+                    <button class="btn" id="calibrateReset">Reset</button>
+                    <button class="btn btn-start" id="calibrateSave" disabled>Save</button>
                 </div>
             </div>
         </div>
