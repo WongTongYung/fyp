@@ -1,8 +1,8 @@
 import queue
 import time
-from database import log_event, log_score
-from calibration import is_in_court, get_court_half, pixel_to_court
-from ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE
+from core.database import log_event, log_score
+from core.calibration import is_in_court, get_court_half, pixel_to_court
+from core.ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE
 
 
 # --- Pickleball scoring rules ---

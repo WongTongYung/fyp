@@ -7,16 +7,19 @@ import cv2
 import logging
 from multiprocessing.shared_memory import SharedMemory
 
-from ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
-                 MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
-                 MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
-                 CMD_REWIND, CMD_RECALIBRATE, read_frame)
+from core.ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
+                      MSG_BOUNCE, MSG_SERVE, MSG_STATUS, MSG_SOURCE, MSG_FRAME_POS,
+                      MSG_RESET, CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME,
+                      CMD_REWIND, CMD_RECALIBRATE, read_frame)
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
-COURT_FILE = "court.json"
+COURT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "court.json")
 
-app = Flask(__name__, template_folder='dashboard', static_folder='dashboard')
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+app = Flask(__name__,
+            template_folder=os.path.join(_ROOT, 'dashboard'),
+            static_folder=os.path.join(_ROOT, 'dashboard'))
 
 _rewind_requested_at = 0.0
 
@@ -389,7 +392,7 @@ def rewind():
 @app.route('/rewind_status')
 def rewind_status():
     """Check if the rewind clip has been written (file modified after request)."""
-    clip_path = os.path.join('styles', 'rewind', 'rewind_clip.bin')
+    clip_path = os.path.join(_ROOT, 'styles', 'rewind', 'rewind_clip.bin')
     ready = False
     if os.path.exists(clip_path):
         mtime = os.path.getmtime(clip_path)
@@ -402,7 +405,7 @@ def rewind_feed():
     """Stream the rewind clip as MJPEG — no codec issues, works in any browser."""
     import struct
 
-    clip_path = os.path.join('styles', 'rewind', 'rewind_clip.bin')
+    clip_path = os.path.join(_ROOT, 'styles', 'rewind', 'rewind_clip.bin')
     if not os.path.exists(clip_path):
         return jsonify({"error": "No rewind clip"}), 404
 
@@ -465,7 +468,7 @@ def stop():
 
 @app.route('/matches')
 def matches_list():
-    from database import get_all_matches
+    from core.database import get_all_matches
     from datetime import datetime
     matches = get_all_matches()
     rows = ""
@@ -518,15 +521,15 @@ def analysis_page(match_id):
 def analysis_data(match_id):
     import json as _json
     import numpy as np
-    from database import get_match_summary, get_match_bounces, get_match_scores
-    from calibration import compute_homography, pixel_to_court
+    from core.database import get_match_summary, get_match_bounces, get_match_scores
+    from core.calibration import compute_homography, pixel_to_court
     summary = get_match_summary(match_id)
     bounces = get_match_bounces(match_id)
     scores = get_match_scores(match_id)
     court_poly = None
     H = None
     try:
-        with open('court.json') as f:
+        with open(COURT_FILE) as f:
             raw = _json.load(f)
         if isinstance(raw, dict):
             court_poly = raw.get("corners")
@@ -598,7 +601,7 @@ def calibrate_load():
 @app.route('/styles/<path:filename>')
 def styles(filename):
     mime = 'video/mp4' if filename.endswith('.mp4') else None
-    resp = send_from_directory('styles', filename, mimetype=mime)
+    resp = send_from_directory(os.path.join(_ROOT, 'styles'), filename, mimetype=mime)
     if filename.endswith('.mp4'):
         resp.headers['Cache-Control'] = 'no-store'
     return resp
@@ -606,12 +609,12 @@ def styles(filename):
 
 @app.route('/css/<path:filename>')
 def css(filename):
-    return send_from_directory('dashboard/css', filename)
+    return send_from_directory(os.path.join(_ROOT, 'dashboard', 'css'), filename)
 
 
 @app.route('/js/<path:filename>')
 def js(filename):
-    return send_from_directory('dashboard/js', filename)
+    return send_from_directory(os.path.join(_ROOT, 'dashboard', 'js'), filename)
 
 
 def run_server():

@@ -1,9 +1,11 @@
 import sqlite3
 import threading
+import os
 from datetime import datetime
 
 
-DB_PATH = "pickleball.db"
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(_ROOT, "pickleball.db")
 _lock = threading.Lock()
 
 

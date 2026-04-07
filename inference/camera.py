@@ -1,7 +1,7 @@
 import queue
 import time
-from ball_tracker import BallKalmanTracker
-from ipc import MSG_FRAME_READY, MSG_FRAME_POS, MSG_DETECTIONS, write_frame
+from core.ball_tracker import BallKalmanTracker
+from core.ipc import MSG_FRAME_READY, MSG_FRAME_POS, MSG_DETECTIONS, write_frame
 
 # --- Thread Functions ---
 
@@ -155,7 +155,9 @@ def _write_rewind_clip(frame_buffer, fps, frame_size):
     """
     import struct
 
-    clip_path = 'styles/rewind/rewind_clip.bin'
+    import os as _os
+    _root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    clip_path = _os.path.join(_root, 'styles', 'rewind', 'rewind_clip.bin')
     count = len(frame_buffer)
     with open(clip_path, 'wb') as f:
         f.write(struct.pack('<II', count, fps))
@@ -274,7 +276,7 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
 
         # Add real-world court coordinates to each detection
         if H is not None:
-            from calibration import pixel_to_court
+            from core.calibration import pixel_to_court
             for det in detections:
                 cx_cm, cy_cm = pixel_to_court(det["cx"], det["cy"], H)
                 det["court_x"] = round(cx_cm, 1)

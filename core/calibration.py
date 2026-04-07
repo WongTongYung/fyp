@@ -6,7 +6,8 @@ import os
 COURT_W = 609.6
 COURT_L = 1341.12 
 NET_Y   = 670.56
-COURT_FILE = "court.json"
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+COURT_FILE = os.path.join(_ROOT, "court.json")
 
 
 # --- Manual calibration ---

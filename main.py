@@ -12,15 +12,15 @@ import torch
 from multiprocessing.shared_memory import SharedMemory
 from inference.camera import capture_thread, save_thread, processing_thread
 from ultralytics import YOLO
-from database import init_db, start_match, end_match
-from game_logic import game_logic_thread
-from calibration import get_court, compute_homography
+from core.database import init_db, start_match, end_match
+from core.game_logic import game_logic_thread
+from core.calibration import get_court, compute_homography
 from config import BALL_MODEL_PATH
-from ipc import (SHM_SIZE, SHM_NAME,
-                 MSG_STATUS, MSG_SOURCE, MSG_LOG,
-                 CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
-                 CMD_RECALIBRATE)
-from win_perf import win32_perf_setup, keep_igpu_alive
+from core.ipc import (SHM_SIZE, SHM_NAME,
+                      MSG_STATUS, MSG_SOURCE, MSG_LOG,
+                      CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
+                      CMD_RECALIBRATE)
+from core.win_perf import win32_perf_setup, keep_igpu_alive
 
 # Limit PyTorch CPU threads so iVCam decoder gets more CPU headroom
 torch.set_num_threads(2)
@@ -40,7 +40,7 @@ def _send(state_queue, msg):
 def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     """Entry point for Process 2 (Display). Runs Flask server."""
     win32_perf_setup()  # Also fix timer/throttling in the display process
-    from server import init_display_process, run_server
+    from core.server import init_display_process, run_server
     init_display_process(cmd_queue, state_queue, shm_name, shm_lock)
     run_server()
 
@@ -68,7 +68,7 @@ def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None,
             if rewind_event:
                 rewind_event.set()
         elif cmd_type == CMD_RECALIBRATE and court_container is not None:
-            from calibration import load_court, compute_homography
+            from core.calibration import load_court, compute_homography
             loaded = load_court()
             if loaded is not None:
                 corners, net = loaded
