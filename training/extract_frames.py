@@ -3,8 +3,8 @@ Extract frames from a video file for labeling in Roboflow.
 
 Usage:
     python training/extract_frames.py                           # uses default video
-    python training/extract_frames.py styles/FixedCamera.mp4    # custom video
-    python training/extract_frames.py styles/FixedCamera.mp4 5  # every 5th frame
+    python training/extract_frames.py assets/FixedCamera.mp4    # custom video
+    python training/extract_frames.py assets/FixedCamera.mp4 5  # every 5th frame
 """
 
 import cv2
@@ -12,7 +12,7 @@ import os
 import sys
 
 
-def extract_frames(video_path="styles/FixedCamera.mp4", every_n=10):
+def extract_frames(video_path="assets/FixedCamera.mp4", every_n=10):
     """Extract every Nth frame from the video for labeling."""
 
     output_dir = os.path.join("training", "frames")
@@ -44,15 +44,15 @@ def extract_frames(video_path="styles/FixedCamera.mp4", every_n=10):
 
     cap.release()
     print(f"\nDone! Saved {saved} frames to {output_dir}/")
-    print(f"\nNext steps:")
+    print("\nNext steps:")
     print(f"  1. Upload {output_dir}/ to Roboflow")
-    print(f"  2. Label the ball in each image (draw bounding boxes)")
-    print(f"  3. Export as YOLOv11 format")
-    print(f"  4. Place dataset in training/ folder")
-    print(f"  5. Run: python training/train.py")
+    print("  2. Label the ball in each image (draw bounding boxes)")
+    print("  3. Export as YOLOv11 format")
+    print("  4. Place dataset in training/ folder")
+    print("  5. Run: python training/train.py")
 
 
 if __name__ == "__main__":
-    video = sys.argv[1] if len(sys.argv) > 1 else "styles/FixedCamera.mp4"
+    video = sys.argv[1] if len(sys.argv) > 1 else "assets/FixedCamera.mp4"
     every_n = int(sys.argv[2]) if len(sys.argv) > 2 else 10
     extract_frames(video, every_n)

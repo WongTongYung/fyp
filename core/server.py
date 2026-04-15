@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 from flask import Flask, jsonify, render_template, send_from_directory, Response, request
 
+from config import COURT_FILE, STREAM_FPS
 from core.calibration import compute_homography, pixel_to_court
 from core.database import get_all_matches, get_match_summary, get_match_bounces, get_match_scores
 from core.ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG,
@@ -20,8 +21,7 @@ from core.ipc import (MSG_FRAME_READY, MSG_DETECTIONS, MSG_SCORE_UPDATE, MSG_LOG
                       CMD_REWIND, CMD_RECALIBRATE, read_frame)
 
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
-
-COURT_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "court.json")
+logger = logging.getLogger(__name__)
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__,
@@ -55,49 +55,36 @@ _shm_name = None
 _shm_lock = None
 
 
-# --- MJPEG Streaming ---
+# --- Shared state buffers (written by _ipc_recv_thread, read by routes/threads) ---
 
 _frame = None
 _frame_lock = threading.Lock()
 _frame_event = threading.Event()
-_STREAM_FPS = 30
 _last_push_time = 0.0
 
-# Pre-encoded JPEG buffer
 _jpeg_buffer = None
 _jpeg_lock = threading.Lock()
 _jpeg_event = threading.Event()
 
+_det_data = None
+_det_lock = threading.Lock()
+_det_event = threading.Event()
 
-def _jpeg_encoder_thread():
-    """Background thread that continuously encodes the latest frame to JPEG."""
-    last_frame = None
-    while True:
-        _frame_event.wait(timeout=1.0)
-        _frame_event.clear()
-        with _frame_lock:
-            frame = _frame
-        if frame is None or frame is last_frame:
-            continue
-        last_frame = frame
-        h, w = frame.shape[:2]
-        max_w = 480
-        if w > max_w:
-            scale = max_w / w
-            frame = cv2.resize(frame, (max_w, int(h * scale)))
-        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
-        jpeg_bytes = buffer.tobytes()
-        global _jpeg_buffer
-        with _jpeg_lock:
-            _jpeg_buffer = jpeg_bytes
-        _jpeg_event.set()
+_SETUP_KEYS = ("serving", "receiving", "server", "server_side",
+               "mode", "team_near", "team_far")
 
 
+# =============================================================================
+# GROUP A - Called by _ipc_recv_thread
+# These are called when a message arrives from Process 1 via state_queue.
+# Each one maps to a message type defined in ipc.py.
+# =============================================================================
+
+# MSG_FRAME_READY — writes raw frame into _frame, wakes _jpeg_encoder_thread
 def push_frame(frame):
-    """Accept a frame for MJPEG streaming. Rate-limited to _STREAM_FPS."""
     global _frame, _last_push_time
     now = time.time()
-    if now - _last_push_time < 1.0 / _STREAM_FPS:
+    if now - _last_push_time < 1.0 / STREAM_FPS:
         return
     _last_push_time = now
     with _frame_lock:
@@ -105,27 +92,8 @@ def push_frame(frame):
     _frame_event.set()
 
 
-def _generate_frames():
-    """Generator that yields pre-encoded JPEG frames for MJPEG stream."""
-    while True:
-        _jpeg_event.wait(timeout=1.0)
-        _jpeg_event.clear()
-        with _jpeg_lock:
-            jpeg = _jpeg_buffer
-        if jpeg is None:
-            continue
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
-
-
-# --- Detection overlay via SSE ---
-_det_data = None
-_det_lock = threading.Lock()
-_det_event = threading.Event()
-
-
+# MSG_DETECTIONS — writes ball/court detection JSON into _det_data, wakes _generate_detections
 def push_detections(detections, frame_w, frame_h, court=None, det_fps=0):
-    """Push detection coordinates for browser canvas overlay via SSE."""
     global _det_data
     data = {"detections": detections, "frame_w": frame_w, "frame_h": frame_h, "fps": det_fps}
     if court is not None:
@@ -135,25 +103,7 @@ def push_detections(detections, frame_w, frame_h, court=None, det_fps=0):
     _det_event.set()
 
 
-def _generate_detections():
-    """SSE generator that yields detection JSON as events."""
-    last_payload = None
-    while True:
-        _det_event.wait(timeout=2.0)
-        _det_event.clear()
-        with _det_lock:
-            payload = _det_data
-        if payload is None:
-            yield ': keepalive\n\n'
-            continue
-        if payload is last_payload:
-            continue
-        last_payload = payload
-        yield f'data: {payload}\n\n'
-
-
-# --- Score state management (called locally by ipc_recv_thread) ---
-
+# MSG_SCORE_UPDATE — updates serving/receiving scores in score_state
 def update_score(serving, receiving, server, server_side=None):
     with _lock:
         score_state["serving"] = serving
@@ -163,12 +113,14 @@ def update_score(serving, receiving, server, server_side=None):
             score_state["server_side"] = server_side
 
 
+# MSG_LOG — appends a log message to score_state (capped at 50)
 def add_log(message):
     with _lock:
         score_state["log"].append(message)
         score_state["log"] = score_state["log"][-50:]
 
 
+# MSG_BOUNCE — appends a bounce point (court coordinates) to score_state
 def add_bounce(court_x, court_y, result):
     with _lock:
         score_state["bounces"].append({
@@ -179,6 +131,7 @@ def add_bounce(court_x, court_y, result):
         score_state["bounces"] = score_state["bounces"][-50:]
 
 
+# MSG_SERVE — appends a serve point to score_state (same list as bounces)
 def add_serve(court_x, court_y, side):
     with _lock:
         score_state["bounces"].append({
@@ -190,26 +143,26 @@ def add_serve(court_x, court_y, side):
         score_state["bounces"] = score_state["bounces"][-50:]
 
 
+# MSG_STATUS — updates pipeline status ("live" / "paused" / "stopped")
 def set_status(status):
     with _lock:
         score_state["status"] = status
 
 
+# MSG_SOURCE — stores the video source so the dashboard knows what is playing
 def set_source(source):
     with _lock:
         score_state["source"] = source if source != 0 else None
 
 
+# MSG_FRAME_POS — updates current frame position (used for video file progress bar)
 def set_frame_pos(frame_pos, fps):
     with _lock:
         score_state["frame_pos"] = frame_pos
         score_state["fps"] = fps
 
 
-_SETUP_KEYS = ("serving", "receiving", "server", "server_side",
-               "mode", "team_near", "team_far")
-
-
+# MSG_RESET — wipes all scores back to zero; also called by /start route
 def reset_score_state(config=None):
     with _lock:
         score_state["serving"] = 0
@@ -229,6 +182,67 @@ def reset_score_state(config=None):
                     score_state[k] = config[k]
 
 
+# =============================================================================
+# GROUP B - Called by Flask routes (NOT by _ipc_recv_thread)
+# These are read-side functions — browser pulls data through these.
+# =============================================================================
+
+# Called by: init_display_process() — runs as a permanent background thread
+# Waits for push_frame() to signal a new frame, encodes it to JPEG, stores in _jpeg_buffer
+def _jpeg_encoder_thread():
+    last_frame = None
+    while True:
+        _frame_event.wait(timeout=1.0)
+        _frame_event.clear()
+        with _frame_lock:
+            frame = _frame
+        if frame is None or frame is last_frame:
+            continue
+        last_frame = frame
+        h, w = frame.shape[:2]
+        max_w = 1280
+        if w > max_w:
+            scale = max_w / w
+            frame = cv2.resize(frame, (max_w, int(h * scale)))
+        _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        jpeg_bytes = buffer.tobytes()
+        global _jpeg_buffer
+        with _jpeg_lock:
+            _jpeg_buffer = jpeg_bytes
+        _jpeg_event.set()
+
+
+# Called by: /video_feed route — yields MJPEG frames to the browser <img> tag
+def _generate_frames():
+    while True:
+        _jpeg_event.wait(timeout=1.0)
+        _jpeg_event.clear()
+        with _jpeg_lock:
+            jpeg = _jpeg_buffer
+        if jpeg is None:
+            continue
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
+
+
+# Called by: /detections route — yields SSE events with ball/court data to the browser canvas
+def _generate_detections():
+    last_payload = None
+    while True:
+        _det_event.wait(timeout=2.0)
+        _det_event.clear()
+        with _det_lock:
+            payload = _det_data
+        if payload is None:
+            yield ': keepalive\n\n'
+            continue
+        if payload is last_payload:
+            continue
+        last_payload = payload
+        yield f'data: {payload}\n\n'
+
+
+# Called by: /start route — reads current setup config to pass into the new match
 def get_setup_config():
     with _lock:
         return {k: score_state[k] for k in _SETUP_KEYS}
@@ -307,6 +321,7 @@ def _ipc_recv_thread():
 
 def init_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     """Initialize IPC references and start background threads. Called once in display process."""
+    logger.info("Initializing display process")
     global _cmd_queue, _state_queue, _shm_name, _shm_lock
     _cmd_queue = cmd_queue
     _state_queue = state_queue
@@ -314,40 +329,49 @@ def init_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     _shm_lock = shm_lock
 
     # Start JPEG encoder thread
-    encoder_t = threading.Thread(target=_jpeg_encoder_thread, daemon=True)
+    encoder_t = threading.Thread(target=_jpeg_encoder_thread, name="JPEGEncoder", daemon=True)
     encoder_t.start()
+    logger.info("Thread started: %s (id=%d)", encoder_t.name, encoder_t.ident)
 
     # Start IPC receiver thread
-    recv_t = threading.Thread(target=_ipc_recv_thread, daemon=True)
+    recv_t = threading.Thread(target=_ipc_recv_thread, name="IPCReceiver", daemon=True)
     recv_t.start()
+    logger.info("Thread started: %s (id=%d)", recv_t.name, recv_t.ident)
 
 
 # --- Routes ---
-
+# PAGES
+# Return a full HTML page rendered by Jinja2 from a template in dashboard/
 @app.route('/')
 def index():
     return render_template('index.html')
 
 
-@app.route('/score')
-def score():
-    with _lock:
-        return jsonify(score_state)
+@app.route('/matches')
+def matches_list():
+    # Compute human-readable duration for each match before passing to the template
+    matches = get_all_matches()
+    for m in matches:
+        m["duration"] = "-"
+        if m.get("started_at") and m.get("ended_at"):
+            try:
+                s = datetime.fromisoformat(m["started_at"])
+                e = datetime.fromisoformat(m["ended_at"])
+                secs = int((e - s).total_seconds())
+                m["duration"] = f"{secs // 60}m {secs % 60}s"
+            except Exception:
+                pass
+    return render_template('matches.html', matches=matches)
 
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(_generate_frames(),
-                    mimetype='multipart/x-mixed-replace; boundary=frame')
+@app.route('/analysis/<int:match_id>')
+def analysis_page(match_id):
+    return render_template('analysis.html', match_id=match_id)
 
 
-@app.route('/detections')
-def detections_feed():
-    return Response(_generate_detections(),
-                    mimetype='text/event-stream',
-                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
-
-
+# COMMANDS
+# Browser sends a POST; route puts a message on cmd_queue and returns immediately.
+# Process 1 picks it up in cmd_listener_thread and acts on it.
 @app.route('/start', methods=['POST'])
 def start():
     # Check if already running
@@ -385,20 +409,107 @@ def pause():
     return jsonify({"status": "paused"})
 
 
+@app.route('/resume', methods=['POST'])
+def resume():
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_RESUME})
+    set_status("live")
+    return jsonify({"status": "live"})
+
+
+@app.route('/stop', methods=['POST'])
+def stop():
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_STOP})
+    set_status("stopped")
+    return jsonify({"status": "stopped"})
+
+
 @app.route('/rewind', methods=['POST'])
 def rewind():
     global _rewind_requested_at
     if _cmd_queue:
         _cmd_queue.put({"type": CMD_REWIND})
-    _rewind_requested_at = time.time()
+    _rewind_requested_at = time.time()   # timestamp used by /rewind_status to detect when clip is ready
     set_status("paused")
     return jsonify({"status": "paused"})
 
 
+@app.route('/update_score', methods=['POST'])
+def update_score_route():
+    # Manual score override from the dashboard; updates score_state directly without going to Process 1
+    data = request.get_json(force=True, silent=True) or {}
+    with _lock:
+        score_state["serving"] = int(data.get("serving", score_state["serving"]))
+        score_state["receiving"] = int(data.get("receiving", score_state["receiving"]))
+        score_state["server"] = int(data.get("server", score_state["server"]))
+        msg = data.get("log")
+        if msg:
+            score_state["log"].append(msg)
+            score_state["log"] = score_state["log"][-50:]   # keep last 50 log entries
+    return jsonify({"status": "ok"})
+
+
+@app.route('/swap_side', methods=['POST'])
+def swap_side():
+    # Toggles server_side between "near" and "far" when players switch ends
+    with _lock:
+        cur = score_state["server_side"]
+        score_state["server_side"] = "far" if cur == "near" else "near"
+        return jsonify({"server_side": score_state["server_side"]})
+
+
+@app.route('/calibrate/save', methods=['POST'])
+def calibrate_save():
+    # Receives 4 corner points + 2 net points, saves to court.json,
+    # then sends CMD_RECALIBRATE so Process 1 reloads the court geometry
+    data = request.get_json(force=True, silent=True) or {}
+    corners = data.get("corners")
+    net = data.get("net")
+    if not corners or len(corners) != 4:
+        return jsonify({"error": "Need exactly 4 corner points"}), 400
+    if not net or len(net) != 2:
+        return jsonify({"error": "Need exactly 2 net points"}), 400
+    payload = {"corners": corners, "net": net}
+    with open(COURT_FILE, "w") as f:
+        json.dump(payload, f)
+    if _cmd_queue:
+        _cmd_queue.put({"type": CMD_RECALIBRATE})
+    return jsonify({"status": "saved"})
+
+
+# LIVE STREAMS
+# Browser keeps the connection open; data is pushed continuously.
+#   /score         - polled by JS every second (short-lived requests)
+#   /video_feed    - MJPEG: one long HTTP response, frames separated by boundary
+#   /detections    - SSE: one long HTTP response, JSON events pushed per frame
+#   /rewind_status - polled by JS until the rewind clip file is ready
+#   /rewind_feed   - MJPEG stream of the saved rewind clip
+@app.route('/score')
+def score():
+    with _lock:
+        return jsonify(score_state)
+
+
+@app.route('/video_feed')
+def video_feed():
+    # multipart/x-mixed-replace keeps the HTTP connection open and replaces the image on each frame
+    return Response(_generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/detections')
+def detections_feed():
+    # SSE: browser keeps connection open and receives a new JSON event per frame
+    return Response(_generate_detections(),
+                    mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
+
 @app.route('/rewind_status')
 def rewind_status():
-    """Check if the rewind clip has been written (file modified after request)."""
-    clip_path = os.path.join(_ROOT, 'styles', 'rewind', 'rewind_clip.bin')
+    # Polled by the dashboard JS; returns ready=true once the clip file is newer than the request time
+    clip_path = os.path.join(_ROOT, 'assets', 'rewind', 'rewind_clip.bin')
     ready = False
     if os.path.exists(clip_path):
         mtime = os.path.getmtime(clip_path)
@@ -408,8 +519,8 @@ def rewind_status():
 
 @app.route('/rewind_feed')
 def rewind_feed():
-    """Stream the rewind clip as MJPEG — no codec issues, works in any browser."""
-    clip_path = os.path.join(_ROOT, 'styles', 'rewind', 'rewind_clip.bin')
+    # Streams the saved rewind clip as MJPEG, frame by frame at original fps
+    clip_path = os.path.join(_ROOT, 'assets', 'rewind', 'rewind_clip.bin')
     if not os.path.exists(clip_path):
         return jsonify({"error": "No rewind clip"}), 404
 
@@ -432,95 +543,12 @@ def rewind_feed():
                     mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
-@app.route('/resume', methods=['POST'])
-def resume():
-    if _cmd_queue:
-        _cmd_queue.put({"type": CMD_RESUME})
-    set_status("live")
-    return jsonify({"status": "live"})
-
-
-@app.route('/update_score', methods=['POST'])
-def update_score_route():
-    data = request.get_json(force=True, silent=True) or {}
-    with _lock:
-        score_state["serving"]   = int(data.get("serving",  score_state["serving"]))
-        score_state["receiving"] = int(data.get("receiving", score_state["receiving"]))
-        score_state["server"]    = int(data.get("server",    score_state["server"]))
-        msg = data.get("log")
-        if msg:
-            score_state["log"].append(msg)
-            score_state["log"] = score_state["log"][-50:]
-    return jsonify({"status": "ok"})
-
-
-@app.route('/swap_side', methods=['POST'])
-def swap_side():
-    with _lock:
-        cur = score_state["server_side"]
-        score_state["server_side"] = "far" if cur == "near" else "near"
-        return jsonify({"server_side": score_state["server_side"]})
-
-
-@app.route('/stop', methods=['POST'])
-def stop():
-    if _cmd_queue:
-        _cmd_queue.put({"type": CMD_STOP})
-    set_status("stopped")
-    return jsonify({"status": "stopped"})
-
-
-@app.route('/matches')
-def matches_list():
-    matches = get_all_matches()
-    rows = ""
-    for m in matches:
-        duration = "—"
-        if m.get("started_at") and m.get("ended_at"):
-            try:
-                s = datetime.fromisoformat(m["started_at"])
-                e = datetime.fromisoformat(m["ended_at"])
-                secs = int((e - s).total_seconds())
-                duration = f"{secs // 60}m {secs % 60}s"
-            except Exception:
-                pass
-        rows += (
-            f'<tr><td>#{m["id"]}</td>'
-            f'<td>{m["started_at"][:19]}</td>'
-            f'<td>{duration}</td>'
-            f'<td><a href="/analysis/{m["id"]}">View Analysis</a></td></tr>'
-        )
-    html = f"""<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Match History</title>
-<link rel="stylesheet" href="/css/style.css">
-<style>
-  table{{width:100%;border-collapse:collapse;margin-top:15px;}}
-  th,td{{padding:10px 14px;border:1px solid #333;text-align:left;}}
-  th{{background:#f5f5f5;font-weight:bold;}}
-  a{{color:#1565c0;text-decoration:none;}}
-  a:hover{{text-decoration:underline;}}
-  .back{{font-size:14px;border:2px solid #333;padding:4px 12px;color:#333;}}
-</style></head>
-<body>
-<header class="header"><h1>PICKLEBALL POINT COUNTING SYSTEM</h1></header>
-<div style="padding:10px 20px;">
-  <a href="/" class="back">← Dashboard</a>
-  <h2 style="margin:15px 0;font-size:20px;font-weight:bold;">Match History</h2>
-  <table>
-    <thead><tr><th>Match</th><th>Started</th><th>Duration</th><th>Analysis</th></tr></thead>
-    <tbody>{rows if rows else '<tr><td colspan="4" style="text-align:center;color:#999;">No matches recorded yet.</td></tr>'}</tbody>
-  </table>
-</div></body></html>"""
-    return html
-
-
-@app.route('/analysis/<int:match_id>')
-def analysis_page(match_id):
-    return render_template('analysis.html', match_id=match_id)
-
-
+# STATIC / DATA
+# One-shot: read from disk or DB, return the result, connection closes.
 @app.route('/api/analysis/<int:match_id>')
 def analysis_data(match_id):
+    # Returns full match data as JSON; consumed by analysis.html JS
+    # Converts pixel bounce coordinates to court coordinates (cm) using the homography matrix
     summary = get_match_summary(match_id)
     bounces = get_match_bounces(match_id)
     scores = get_match_scores(match_id)
@@ -558,7 +586,7 @@ def analysis_data(match_id):
 
 @app.route('/calibrate/frame')
 def calibrate_frame():
-    """Return a full-resolution JPEG snapshot from the live feed for calibration."""
+    # Returns a single JPEG snapshot of the current frame for the calibration UI
     with _frame_lock:
         frame = _frame
     if frame is None:
@@ -567,28 +595,9 @@ def calibrate_frame():
     return Response(buffer.tobytes(), mimetype='image/jpeg')
 
 
-@app.route('/calibrate/save', methods=['POST'])
-def calibrate_save():
-    """Save 6 clicked calibration points (4 corners + 2 net) to court.json."""
-    data = request.get_json(force=True, silent=True) or {}
-    corners = data.get("corners")
-    net = data.get("net")
-    if not corners or len(corners) != 4:
-        return jsonify({"error": "Need exactly 4 corner points"}), 400
-    if not net or len(net) != 2:
-        return jsonify({"error": "Need exactly 2 net points"}), 400
-    payload = {"corners": corners, "net": net}
-    with open(COURT_FILE, "w") as f:
-        json.dump(payload, f)
-    # Notify tracking process to reload court from file
-    if _cmd_queue:
-        _cmd_queue.put({"type": CMD_RECALIBRATE})
-    return jsonify({"status": "saved"})
-
-
 @app.route('/calibrate/load')
 def calibrate_load():
-    """Load existing calibration from court.json if it exists."""
+    # Returns existing court.json so the calibration UI can pre-fill prior points
     if not os.path.exists(COURT_FILE):
         return jsonify({"exists": False})
     with open(COURT_FILE, "r") as f:
@@ -596,10 +605,11 @@ def calibrate_load():
     return jsonify({"exists": True, "corners": data.get("corners"), "net": data.get("net")})
 
 
-@app.route('/styles/<path:filename>')
-def styles(filename):
+@app.route('/assets/<path:filename>')
+def assets(filename):
+    # Serves video and other asset files; disables cache for .mp4 so browser always fetches fresh
     mime = 'video/mp4' if filename.endswith('.mp4') else None
-    resp = send_from_directory(os.path.join(_ROOT, 'styles'), filename, mimetype=mime)
+    resp = send_from_directory(os.path.join(_ROOT, 'assets'), filename, mimetype=mime)
     if filename.endswith('.mp4'):
         resp.headers['Cache-Control'] = 'no-store'
     return resp
@@ -616,5 +626,5 @@ def js(filename):
 
 
 def run_server():
-    """Run Flask — called in the display process."""
+    """Run Flask -- called in the display process."""
     app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

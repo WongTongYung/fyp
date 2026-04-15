@@ -1,6 +1,6 @@
 PICKLEBALL SYSTEM - PERFORMANCE NOTES
 ======================================
-Last updated: 2026-04-05
+Last updated: 2026-04-15
 
 
 ========================================================================
@@ -77,6 +77,67 @@ Suggested paragraph:
   These fixes maintained a stable 60fps capture rate regardless of the
   foreground application state, and additionally resolved a performance
   gap between WiFi and USB camera connections."
+
+
+========================================================================
+CLOUD DEPLOYMENT - FINDING
+========================================================================
+
+QUESTION: Can Flask be moved to Google Cloud in future?
+--------------------------------------------------------
+Flask itself is not the constraint -- it works fine on any cloud platform
+when fronted by a production WSGI server such as Gunicorn. The constraint
+is the physical architecture of the system.
+
+WHY THE TRACKING SIDE CANNOT MOVE TO THE CLOUD
+-----------------------------------------------
+Three hard dependencies tie the tracking process to the local machine:
+
+  1. Camera capture   -- A cloud VM has no physical camera attached.
+                         The camera must remain where the court is.
+
+  2. Shared memory    -- multiprocessing.SharedMemory only works between
+                         processes on the SAME machine. It cannot span
+                         a network connection.
+
+  3. YOLO inference   -- The RTX 4050 is free. A cloud GPU instance costs
+                         money per hour and adds network latency.
+
+WHAT A HYBRID ARCHITECTURE WOULD LOOK LIKE
+-------------------------------------------
+If cloud hosting were required, the system would split into two parts:
+
+  Local (laptop at court)              Google Cloud VM
+  ┌──────────────────────┐             ┌───────────────────────┐
+  │ Camera capture       │  WebSocket  │ Flask dashboard       │
+  │ YOLO inference       │ ──POST────▶ │ Scoreboard UI         │
+  │ Game logic           │             │ Match history API     │
+  │ Score/frame sender   │             │ Database              │
+  └──────────────────────┘             └───────────────────────┘
+                                              ▲
+                                    Any browser, anywhere
+
+  The laptop would push score updates and compressed frames to the cloud
+  server over the internet. The cloud server would host only the dashboard
+  and database -- no camera or inference logic.
+
+FOR THE FYP DEMONSTRATION
+--------------------------
+Cloud hosting is not required and not recommended for the FYP submission.
+
+Running Flask locally and accessing it over WiFi is completely standard
+for a controlled court environment. Cloud hosting would add cost, network
+complexity, and latency with no practical benefit during a demonstration.
+
+If a marker raises this point, the answer is:
+
+  "Flask can be deployed to a cloud platform using a production WSGI
+  server such as Gunicorn. However, the camera capture and YOLO inference
+  must remain on the local machine since they depend on physical hardware.
+  In a cloud scenario, the local machine would act as a data sender,
+  pushing score updates and video frames to a cloud-hosted dashboard.
+  For the scope of this FYP, local WiFi deployment is sufficient and
+  avoids unnecessary infrastructure cost and complexity."
 
 
 ========================================================================

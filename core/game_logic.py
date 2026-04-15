@@ -1,5 +1,6 @@
 import queue
 import time
+from config import RALLY_END_SEC, HISTORY_SIZE, SERVE_VELOCITY_THRESH, SERVE_FALLBACK_SEC
 from core.database import log_event, log_score
 from core.calibration import is_in_court, get_court_half, pixel_to_court
 from core.ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE
@@ -28,7 +29,7 @@ class GameState:
         # Rally tracking
         self.rally_bounces = []        # list of {"side", "in_court", "cx", "cy"}
         self.rally_active = False
-        self.RALLY_END_SEC = 2.0       # seconds with no ball = rally over
+        self.RALLY_END_SEC = RALLY_END_SEC
 
         # Ball tracking
         self.prev_cx = None
@@ -39,11 +40,12 @@ class GameState:
 
         # Serve detection (velocity-based)
         self.ball_history = []              # recent positions: [(cx, cy, time), ...]
-        self.HISTORY_SIZE = 5              # keep last N detections
-        self.SERVE_VELOCITY_THRESH = 120   # pixels/frame displacement to trigger serve
+        self.HISTORY_SIZE = HISTORY_SIZE
+        self.SERVE_VELOCITY_THRESH = SERVE_VELOCITY_THRESH
         self.serve_state = "WAITING"       # WAITING → SERVE_DETECTED → RALLY_ACTIVE
         self.score_cooldown_until = time.monotonic() + 5.0  # ignore first 5s (pre-game toss-backs)
-        self.SERVE_FALLBACK_SEC = 10       # if no serve detected after this, fall back to bounce-based rally
+        # if no serve detected after this, fall back to bounce-based rally
+        self.SERVE_FALLBACK_SEC = SERVE_FALLBACK_SEC
 
     def _send(self, msg):
         """Send a message to the display process via state_queue (non-blocking)."""
@@ -122,8 +124,9 @@ class GameState:
         if not self.rally_bounces:
             return
         if len(self.rally_bounces) < 2:
-            self._push("rally_ignored",
-                        notes=f"Only {len(self.rally_bounces)} bounce — likely not a real rally")
+            self._push(
+                "rally_ignored",
+                notes=f"Only {len(self.rally_bounces)} bounce — likely not a real rally")
             self.rally_bounces = []
             self.rally_active = False
             self.serve_state = "WAITING"
@@ -167,7 +170,7 @@ class GameState:
             self.ball_history = self.ball_history[-self.HISTORY_SIZE:]
 
         if self.serve_state == "WAITING" and len(self.ball_history) >= 3:
-            speed, dx, dy = self._get_velocity()
+            speed, _, _ = self._get_velocity()
             if speed >= self.SERVE_VELOCITY_THRESH:
                 court_poly, net_line, H = self._get_court()
                 if court_poly is not None:
@@ -202,8 +205,11 @@ class GameState:
                     fallback = (cooldown_expired
                                 and self.serve_state == "WAITING"
                                 and self.score_cooldown_until > 0
-                                and time.monotonic() - self.score_cooldown_until >= self.SERVE_FALLBACK_SEC)
-                    serve_ok = self.serve_state != "WAITING" or fallback or self.score_cooldown_until == 0
+                                and (time.monotonic() - self.score_cooldown_until
+                                     >= self.SERVE_FALLBACK_SEC))
+                    serve_ok = (self.serve_state != "WAITING"
+                                or fallback
+                                or self.score_cooldown_until == 0)
                     if (in_court or self.rally_active) and serve_ok:
                         self.rally_bounces.append({
                             "side": side, "in_court": in_court,
@@ -252,7 +258,6 @@ def game_logic_thread(coord_queue, stop_event, match_id, court_container,
     T4 — reads ball coordinates from coord_queue,
     runs game state logic, updates scoreboard and DB.
     """
-    print("Starting game logic thread...")
     state = GameState(match_id, court_container, state_queue,
                       setup_config or {})
 
@@ -274,4 +279,3 @@ def game_logic_thread(coord_queue, stop_event, match_id, court_container,
             state.process_missing()
             continue
 
-    print("Game logic thread stopped.")

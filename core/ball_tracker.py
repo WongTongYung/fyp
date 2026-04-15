@@ -1,5 +1,7 @@
 import numpy as np
 
+from config import MAX_PREDICT_FRAMES
+
 
 class BallKalmanTracker:
     """
@@ -10,8 +12,6 @@ class BallKalmanTracker:
     Bridges short detection gaps (1-5 frames) with predicted positions
     and smooths noisy YOLO detections for more stable bounce/velocity detection.
     """
-
-    MAX_PREDICT_FRAMES = 5  # stop predicting after this many consecutive misses
 
     def __init__(self, dt=1.0, process_noise=100.0, measurement_noise=5.0):
         self.dt = dt
@@ -81,7 +81,7 @@ class BallKalmanTracker:
             return None
 
         self.miss_count += 1
-        if self.miss_count > self.MAX_PREDICT_FRAMES:
+        if self.miss_count > MAX_PREDICT_FRAMES:
             return None  # too many consecutive misses — stop predicting
 
         self._predict()

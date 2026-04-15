@@ -6,11 +6,13 @@ import ctypes
 import cv2
 from collections import deque
 
+from config import STREAM_FPS, REWIND_BUF_SEC
 from core.ball_tracker import BallKalmanTracker
 from core.calibration import pixel_to_court
 from core.ipc import MSG_FRAME_READY, MSG_FRAME_POS, MSG_DETECTIONS, write_frame
 
 # --- Thread Functions ---
+
 
 def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
                    calib_queue=None, static_frame=None, pause_event=None,
@@ -20,7 +22,6 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
       - writes raw frames to shared memory for the display process
       - queues frames for YOLO processing and video saving
     """
-    print("Starting capture thread...")
 
     # set high thread priority by calling Windows API directly
     try:
@@ -29,7 +30,6 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
         pass
 
     # Rate limit for sending frames to the display process
-    _STREAM_FPS = 30
     _last_push_time = 0.0
     _frame_seq = 0
 
@@ -37,7 +37,7 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
         """Write frame to shared memory and notify display process."""
         nonlocal _last_push_time, _frame_seq
         now = time.time()
-        if now - _last_push_time < 1.0 / _STREAM_FPS:
+        if now - _last_push_time < 1.0 / STREAM_FPS:
             return
         _last_push_time = now
         if shm is not None and state_queue is not None:
@@ -61,7 +61,7 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
             if calib_queue is not None and not calib_queue.full():
                 calib_queue.put_nowait(static_frame)
             time.sleep(1.0 / fps if fps > 0 else 1.0 / 30)
-        print("Capture thread stopped.")
+
         return
 
     frame_count = 0
@@ -71,6 +71,7 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
     while not stop_event.is_set():
         if pause_event and pause_event.is_set():
             time.sleep(0.1)
+            next_frame_time = time.time()  # reset so no fast-forward catch-up on resume
             continue
 
         ret, frame = cap.read()
@@ -117,7 +118,7 @@ def capture_thread(cap, save_queue, process_queue, stop_event, fps=0,
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
-    print("Capture thread stopped.")
+
 
 def save_thread(out, save_queue, stop_event, rewind_event=None, fps=30):
     """Thread function to save frames to a file.
@@ -127,11 +128,9 @@ def save_thread(out, save_queue, stop_event, rewind_event=None, fps=30):
     file that the browser can play immediately — the main recording is never
     interrupted.
     """
-    REWIND_BUF_SEC = 15
     buf_max = max(REWIND_BUF_SEC * (fps if fps > 0 else 30), 1)
     frame_buffer = deque(maxlen=buf_max)
 
-    print("Starting save thread...")
     _clip_written = False
     _frame_size = None
     while not stop_event.is_set() or not save_queue.empty():
@@ -155,7 +154,6 @@ def save_thread(out, save_queue, stop_event, rewind_event=None, fps=30):
             if stop_event.is_set():
                 break
             continue
-    print("Save thread stopped.")
 
 
 def _write_rewind_clip(frame_buffer, fps, frame_size):
@@ -164,7 +162,7 @@ def _write_rewind_clip(frame_buffer, fps, frame_size):
     Format: [uint32 count][uint32 fps] then for each frame [uint32 size][jpeg bytes]
     """
     _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    clip_path = os.path.join(_root, 'styles', 'rewind', 'rewind_clip.bin')
+    clip_path = os.path.join(_root, 'assets', 'rewind', 'rewind_clip.bin')
     count = len(frame_buffer)
     with open(clip_path, 'wb') as f:
         f.write(struct.pack('<II', count, fps))
@@ -174,6 +172,7 @@ def _write_rewind_clip(frame_buffer, fps, frame_size):
             f.write(data)
     print(f"[Save] Rewind clip written: {count} frames to {clip_path}")
 
+
 def processing_thread(process_queue, stop_event, model, coord_queue,
                       court_container=None, state_queue=None):
     """
@@ -181,7 +180,6 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
     Extracts detection coordinates and sends them to the display process
     via state_queue — the browser canvas handles the overlay.
     """
-    print("Starting processing thread...")
     fps_counter = 0
     fps_display = 0.0
     fps_timer = time.time()
@@ -310,4 +308,3 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
             except queue.Full:
                 pass
 
-    print("Processing thread stopped.")

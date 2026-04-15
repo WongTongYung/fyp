@@ -70,8 +70,9 @@ A real-time pickleball ball tracking and scoring system using **YOLOv11** comput
 pickleball/
 ├── main.py                     # Entry point
 ├── config.py                   # Model path and shared config
-├── court.json                  # Saved court calibration (auto-generated)
-├── pickleball.db               # SQLite match database (auto-generated)
+├── data/
+│   ├── pickleball.db           # SQLite match database (auto-generated)
+│   └── court.json              # Saved court calibration (auto-generated)
 ├── core/
 │   ├── ball_tracker.py         # Kalman filter
 │   ├── calibration.py          # Court calibration & homography
@@ -89,7 +90,7 @@ pickleball/
 │   ├── index.html              # Main dashboard UI
 │   ├── css/style.css
 │   └── js/main.js
-├── styles/
+├── assets/
 │   └── rewind/                 # Recorded match video output
 └── training/                   # Training scripts and datasets
 ```
@@ -109,6 +110,8 @@ Install dependencies:
 pip install ultralytics opencv-python flask torch torchvision numpy pillow
 ```
 
+> **H.264 video recording (Windows):** Place `openh264-1.8.0-win64.dll` in the project root alongside `main.py`. OpenCV looks for it automatically in the working directory to encode match recordings. Without it, the rewind/recording feature will not work. The file is excluded from git (`.gitignore`) so it must be obtained separately.
+
 ---
 
 ## Usage
@@ -116,7 +119,7 @@ pip install ultralytics opencv-python flask torch torchvision numpy pillow
 ### Run with a video file
 
 ```bash
-python main.py --source styles/FixedCamera.mp4
+python main.py --source assets/FixedCamera.mp4
 ```
 
 ### Run with a live camera
@@ -207,8 +210,6 @@ On Windows 11 with DroidCam / iVCam, the Intel iGPU hardware decoder sleeps aggr
 - Keeping a 1×1 pixel OpenGL window rendering at 10fps to hold the iGPU awake
 - Disabling EcoQoS power throttling via Win32 API
 - Raising process priority and setting the Windows timer resolution to 1ms
-
-See `PERFORMANCE_NOTES.txt` for the full investigation and fix details.
 
 ---
 

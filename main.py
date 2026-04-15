@@ -50,7 +50,7 @@ def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     from core.server import init_display_process, run_server
     init_display_process(cmd_queue, state_queue, shm_name, shm_lock)
     run_server()
-  
+
 
 def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None,
                         court_container=None, state_queue=None):
@@ -84,16 +84,19 @@ def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None,
                     court_container["poly"] = corners
                     court_container["net"] = net
                     court_container["H"] = H
-                print("[Calibration] Court reloaded from browser calibration")
+                logging.info("[Calibration] Court reloaded from browser calibration")
                 if state_queue:
-                    _send(state_queue, {"type": MSG_LOG, "message": "Court recalibrated from browser"})
+                    _send(state_queue, {
+                        "type": MSG_LOG,
+                        "message": "Court recalibrated from browser"
+                    })
 
 
 def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=None):
     """Full pipeline: capture → raw MJPEG + YOLO detections via IPC."""
     init_db()
     match_id = start_match()
-    print(f"Match started (ID: {match_id})")
+    logging.info("[Process-1 Tracking] Match started (ID: %d)", match_id)
     _send(state_queue, {"type": MSG_LOG, "message": f"Match started (ID: {match_id})"})
 
     # Queues for threads
@@ -119,15 +122,18 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     if is_image:
         static_frame = cv2.imread(source)
         if static_frame is None:
-            print(f"Error: Could not read image: {source}")
-            _send(state_queue, {"type": MSG_LOG, "message": f"Error: Could not read image: {source}"})
+            logging.error("[Process-1 Tracking] Error: Could not read image: %s", source)
+            _send(state_queue, {
+                "type": MSG_LOG,
+                "message": f"Error: Could not read image: {source}"
+            })
             return
         frame_height, frame_width = static_frame.shape[:2]
         fps = 30
     else:
         # Scan available cameras when using camera index
         if isinstance(source, int):
-            print("[Camera] Scanning available cameras...")
+            logging.info("[Process-1 Tracking] [Camera] Scanning available cameras...")
             for backend_name, backend in [("MSMF", cv2.CAP_MSMF), ("DSHOW", cv2.CAP_DSHOW)]:
                 for i in range(5):
                     test_cap = cv2.VideoCapture(i, backend)
@@ -135,8 +141,11 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
                         w = int(test_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                         h = int(test_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                         f = test_cap.get(cv2.CAP_PROP_FPS)
-                        print(f"  [Camera {i}] ({backend_name}) Available - {w}x{h} @ {f}fps")
-                        _send(state_queue, {"type": MSG_LOG, "message": f"Camera {i} ({backend_name}): {w}x{h} @ {f}fps"})
+                        logging.info("[Process-1 Tracking] [Camera %d] (%s) Available - %dx%d @ %.0ffps", i, backend_name, w, h, f)
+                        _send(state_queue, {
+                            "type": MSG_LOG,
+                            "message": f"Camera {i} ({backend_name}): {w}x{h} @ {f}fps"
+                        })
                     else:
                         pass
                     test_cap.release()
@@ -144,17 +153,21 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         # Try multiple backends
         cap = None
         if isinstance(source, int):
-            for backend_name, backend in [("MSMF", cv2.CAP_MSMF), ("DSHOW", cv2.CAP_DSHOW), ("AUTO", cv2.CAP_ANY)]:
+            backends = [("MSMF", cv2.CAP_MSMF), ("DSHOW", cv2.CAP_DSHOW), ("AUTO", cv2.CAP_ANY)]
+            for backend_name, backend in backends:
                 cap = cv2.VideoCapture(source, backend)
                 if cap.isOpened():
-                    print(f"[Camera] Opened camera {source} with {backend_name}")
-                    _send(state_queue, {"type": MSG_LOG, "message": f"Opened camera {source} with {backend_name}"})
+                    logging.info("[Process-1 Tracking] [Camera] Opened camera %s with %s", source, backend_name)
+                    _send(state_queue, {
+                        "type": MSG_LOG,
+                        "message": f"Opened camera {source} with {backend_name}"
+                    })
                     break
                 cap.release()
         else:
             cap = cv2.VideoCapture(source)
         if not cap or not cap.isOpened():
-            print("Error: Could not open video source.")
+            logging.error("[Process-1 Tracking] Error: Could not open video source.")
             _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video source."})
             return
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
@@ -164,14 +177,16 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         fps = int(cap.get(cv2.CAP_PROP_FPS))
         if fps == 0:
             fps = 30
-            print(f"[Camera] FPS not reported, defaulting to {fps}")
-        print(f"[Camera] Resolution: {frame_width}x{frame_height}, FPS: {fps}")
+            logging.warning("[Process-1 Tracking] [Camera] FPS not reported, defaulting to %d", fps)
+        logging.info("[Process-1 Tracking] [Camera] Resolution: %dx%d, FPS: %d", frame_width, frame_height, fps)
 
     # Setup Video Writer (H.264 via OpenH264 — browser-playable after match ends)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    out = cv2.VideoWriter('styles/rewind/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height))
+    out = cv2.VideoWriter(
+        'assets/rewind/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height)
+    )
     if not out.isOpened():
-        print("Error: Could not open video writer.")
+        logging.error("[Process-1 Tracking] Error: Could not open video writer.")
         _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video writer."})
         if cap:
             cap.release()
@@ -183,7 +198,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     else:
         ret, first_frame = cap.read()
         if not ret:
-            print("Error: Could not read first frame.")
+            logging.error("[Process-1 Tracking] Error: Could not read first frame.")
             _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not read first frame."})
             cap.release()
             out.release()
@@ -202,61 +217,57 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     H = compute_homography(court_poly, net=net_line) if court_poly is not None else None
     court_container = {"poly": court_poly, "net": net_line, "H": H, "lock": threading.Lock()}
     if court_poly is None:
-        print("[Calibration] No court set — will retry automatically from live frames")
+        logging.warning("[Process-1 Tracking] No court set — will retry automatically from live frames")
         _send(state_queue, {"type": MSG_LOG, "message": "No court set — will retry automatically"})
 
     calib_queue = queue.Queue(maxsize=4)
 
-    print("Starting streams...")
     _send(state_queue, {"type": MSG_LOG, "message": "Starting streams..."})
 
     # Use setup config from display process, or empty dict
     setup_config = config or {}
 
     # --- Create and Start Threads ---
-    t1 = threading.Thread(target=capture_thread, args=(
+    t1 = threading.Thread(target=capture_thread, name="Thread-Capture", args=(
         cap, save_queue, process_queue, stop_event,
         fps if is_file else 0, calib_queue, static_frame, pause_event,
         state_queue, shm, shm_lock,
     ))
-    t2 = threading.Thread(target=save_thread, args=(out, save_queue, stop_event, rewind_event, fps))
-    t3 = threading.Thread(target=processing_thread, args=(
+    t2 = threading.Thread(target=save_thread, name="Thread-Save", args=(out, save_queue, stop_event, rewind_event, fps))
+    t3 = threading.Thread(target=processing_thread, name="Thread-YOLO", args=(
         process_queue, stop_event, model, coord_queue, court_container,
         state_queue,
     ))
-    t4 = threading.Thread(target=game_logic_thread, args=(
+    t4 = threading.Thread(target=game_logic_thread, name="Thread-GameLogic", args=(
         coord_queue, stop_event, match_id, court_container, pause_event,
         state_queue, setup_config,
     ))
-    t_cmd = threading.Thread(target=cmd_listener_thread, args=(
+    t_cmd = threading.Thread(target=cmd_listener_thread, name="Thread-CmdListener", args=(
         cmd_queue, stop_event, pause_event, rewind_event,
         court_container, state_queue,
     ), daemon=True)
 
     _send(state_queue, {"type": MSG_STATUS, "status": "live"})
-    t1.start()
-    t2.start()
-    t3.start()
-    t4.start()
-    t_cmd.start()
+    for t in (t1, t2, t3, t4, t_cmd):
+        t.start()
+        logging.info("[Process-1 Tracking] Thread started: %s (id=%d)", t.name, t.ident)
 
     # Wait for pipeline to finish
     try:
         while t1.is_alive() or t3.is_alive():
             t1.join(timeout=0.5)
     except KeyboardInterrupt:
-        print("\nCtrl+C received, stopping...")
+        logging.info("[Process-1 Tracking] Ctrl+C received, stopping...")
         stop_event.set()
 
-    t1.join()
-    t2.join()
-    t3.join()
-    t4.join()
+    for t in (t1, t2, t3, t4):
+        t.join()
+        logging.info("[Process-1 Tracking] Thread stopped: %s", t.name)
 
     # --- Cleanup ---
     _send(state_queue, {"type": MSG_STATUS, "status": "stopped"})
     end_match(match_id)
-    print(f"Match ended (ID: {match_id}). Cleaning up.")
+    logging.info("[Process-1 Tracking] Match ended (ID: %d). Cleaning up.", match_id)
     _send(state_queue, {"type": MSG_LOG, "message": f"Match ended (ID: {match_id})"})
     if cap:
         cap.release()
@@ -287,7 +298,6 @@ if __name__ == "__main__":
     _igpu_thread.start()
     logging.info(f"[{_igpu_thread.name}] Background keep-alive started.")
 
-
     # Use IPC
     # Clean up any stale shared memory
     try:
@@ -296,7 +306,7 @@ if __name__ == "__main__":
         stale.unlink()
     except FileNotFoundError:
         pass
-    
+
     # Create new shared memory and synchronization primitives
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
     shm_lock = multiprocessing.Lock()
@@ -313,7 +323,6 @@ if __name__ == "__main__":
 
     atexit.register(cleanup)
 
-
     # --- Load YOLO model (only in tracking process) ---
     model = YOLO(BALL_MODEL_PATH)
     model.to("cuda")
@@ -325,7 +334,7 @@ if __name__ == "__main__":
         if src.isdigit():
             src = int(src)
         elif not os.path.isfile(src):
-            print(f"Error: '{src}' is not a valid camera index or file path.")
+            logging.error("Error: '%s' is not a valid camera index or file path.", src)
             sys.exit(1)
 
     # --- Start Display Process (Process 2) ---
@@ -336,18 +345,20 @@ if __name__ == "__main__":
         daemon=True,
     )
     display_proc.start()
+    logging.info("[Process-2 Display] Started (PID: %d)", display_proc.pid)
 
     time.sleep(1)
     webbrowser.open("http://127.0.0.1:5000")
 
     # --- Tracking Process (Process 1 = this process) ---
+    logging.info("[Process-1 Tracking] Started (PID: %d)", os.getpid())
     if src is not None:
         run_pipeline(src, state_queue, shm, shm_lock, cmd_queue, model)
     else:
-        print("Dashboard ready at http://127.0.0.1:5000 — use the Start button.")
+        logging.info("[Process-1 Tracking] Dashboard ready at http://127.0.0.1:5000 -- use the Start button.")
         try:
             run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model)
         except KeyboardInterrupt:
-            print("\nShutting down...")
+            logging.info("[Process-1 Tracking] Shutting down...")
             _send(state_queue, {"type": MSG_STATUS, "status": "shutdown"})
             time.sleep(1)

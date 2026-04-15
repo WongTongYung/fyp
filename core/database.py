@@ -1,16 +1,16 @@
+import os
 import sqlite3
 import threading
-import os
 from datetime import datetime
 
+from config import DB_PATH
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(_ROOT, "pickleball.db")
 _lock = threading.Lock()
 
 
 def init_db():
     """Create tables if they don't exist."""
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with sqlite3.connect(DB_PATH) as conn:
         # WAL mode allows reads and writes to happen concurrently —
         # prevents the /matches page from blocking while game_logic writes at 25fps

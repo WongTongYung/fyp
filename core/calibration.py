@@ -1,13 +1,11 @@
-import cv2
-import numpy as np
 import json
+import logging
 import os
 
-COURT_W = 609.6
-COURT_L = 1341.12 
-NET_Y   = 670.56
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-COURT_FILE = os.path.join(_ROOT, "court.json")
+import cv2
+import numpy as np
+
+from config import COURT_W, COURT_L, NET_Y, COURT_FILE
 
 
 # --- Manual calibration ---
@@ -65,7 +63,7 @@ def _save(corners, net=None):
     payload["net"] = net.tolist() if net is not None else None
     with open(COURT_FILE, "w") as f:
         json.dump(payload, f)
-    print(f"[Calibration] Court saved to {COURT_FILE}")
+    logging.info("[Calibration] Court saved to %s", COURT_FILE)
 
 
 def load_court():
@@ -73,7 +71,7 @@ def load_court():
         return None
     with open(COURT_FILE, "r") as f:
         data = json.load(f)
-    print(f"[Calibration] Court loaded from {COURT_FILE}")
+    logging.info("[Calibration] Court loaded from %s", COURT_FILE)
     corners = np.array(data["corners"], dtype=np.float32)
     net = np.array(data["net"], dtype=np.float32) if data.get("net") else None
     return corners, net
