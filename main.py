@@ -8,6 +8,7 @@ import webbrowser
 import time
 import atexit
 import torch
+import logging
 
 from multiprocessing.shared_memory import SharedMemory
 from ultralytics import YOLO
@@ -22,6 +23,11 @@ from core.ipc import (SHM_SIZE, SHM_NAME,
                       CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
                       CMD_RECALIBRATE)
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(threadName)s] %(levelname)s: %(message)s',
+    datefmt='%H:%M:%S'
+)
 
 # Limit PyTorch CPU threads so DroidCam decoder gets more CPU headroom
 torch.set_num_threads(2)
@@ -44,7 +50,7 @@ def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
     from core.server import init_display_process, run_server
     init_display_process(cmd_queue, state_queue, shm_name, shm_lock)
     run_server()
-
+  
 
 def cmd_listener_thread(cmd_queue, stop_event, pause_event, rewind_event=None,
                         court_container=None, state_queue=None):
@@ -275,24 +281,29 @@ def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model):
 
 
 if __name__ == "__main__":
-    # Keep Intel iGPU active so DroidCam doesn't throttle when no window is visible
-    _igpu_thread = threading.Thread(target=keep_igpu_alive, daemon=True)
+    # Keep Intel iGPU active so DroidCam doesn't throttle when no window is visible.
+    # daemon=True ensures this thread is killed automatically when the main program exits,
+    _igpu_thread = threading.Thread(target=keep_igpu_alive, name="Thread-iGPU", daemon=True)
     _igpu_thread.start()
+    logging.info(f"[{_igpu_thread.name}] Background keep-alive started.")
 
-    # --- Create IPC resources ---
-    # Clean up any stale shared memory from a previous crash
+
+    # Use IPC
+    # Clean up any stale shared memory
     try:
         stale = SharedMemory(name=SHM_NAME, create=False)
         stale.close()
         stale.unlink()
     except FileNotFoundError:
         pass
-
+    
+    # Create new shared memory and synchronization primitives
     shm = SharedMemory(name=SHM_NAME, create=True, size=SHM_SIZE)
     shm_lock = multiprocessing.Lock()
     cmd_queue = multiprocessing.Queue()
     state_queue = multiprocessing.Queue(maxsize=512)
 
+    # Ensure shared memory is cleaned up on exit
     def cleanup():
         try:
             shm.close()
@@ -302,11 +313,23 @@ if __name__ == "__main__":
 
     atexit.register(cleanup)
 
+
     # --- Load YOLO model (only in tracking process) ---
     model = YOLO(BALL_MODEL_PATH)
     model.to("cuda")
 
+    # Argument safety check
+    src = None
+    if len(sys.argv) > 1:
+        src = sys.argv[1]
+        if src.isdigit():
+            src = int(src)
+        elif not os.path.isfile(src):
+            print(f"Error: '{src}' is not a valid camera index or file path.")
+            sys.exit(1)
+
     # --- Start Display Process (Process 2) ---
+    # Display process webserver is started before tracking loop
     display_proc = multiprocessing.Process(
         target=run_display_process,
         args=(cmd_queue, state_queue, SHM_NAME, shm_lock),
@@ -318,10 +341,7 @@ if __name__ == "__main__":
     webbrowser.open("http://127.0.0.1:5000")
 
     # --- Tracking Process (Process 1 = this process) ---
-    if len(sys.argv) > 1:
-        src = sys.argv[1]
-        if src.isdigit():
-            src = int(src)
+    if src is not None:
         run_pipeline(src, state_queue, shm, shm_lock, cmd_queue, model)
     else:
         print("Dashboard ready at http://127.0.0.1:5000 — use the Start button.")

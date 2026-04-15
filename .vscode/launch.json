@@ -6,7 +6,9 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
-            "args": ["styles/FixedCamera.mp4"],
+            "args": [
+                "styles/trainingData/FixedCamera.mp4"
+            ],
             "console": "integratedTerminal"
         },
         {

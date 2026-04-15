@@ -62,7 +62,7 @@ body {
 .grid-container {
     display: grid;
     grid-template-columns: 3fr 1fr;
-    grid-template-rows: 3fr 1fr;
+    grid-template-rows: 2fr 1fr;
     gap: 16px;
     height: calc(100vh - 100px);
 }
@@ -383,7 +383,7 @@ body {
 
 .score-value {
     display: block;
-    font-size: 120px;
+    font-size: 80px;
     font-weight: 700;
     line-height: 1;
 }

@@ -1,116 +1,237 @@
-# Pickleball Ball Detection & Tracking System
+# Pickleball Tracking System
 
-An automated pickleball tracking system using computer vision (YOLOv11) to detect the ball in real-time from a live camera feed, with a web dashboard for score display and post-match analysis.
+A real-time pickleball ball tracking and scoring system using **YOLOv11** computer vision, served through a live web dashboard. Designed for a fixed overhead/side camera setup with automatic court calibration, full scoring logic, and post-match video review.
+
+---
+
+## Demo
+
+> Add a screenshot or screen recording here.
+>
+> **Images:** Drop a `.png` into the `docs/` folder, then replace the line below:
+> ```
+> ![Dashboard Screenshot](docs/dashboard.png)
+> ```
+>
+> **Videos:** On GitHub, open this file for editing → drag and drop an `.mp4` directly into the editor → GitHub uploads it and inserts the embed link automatically.
+
+---
+
+## Features
+
+- **Real-time ball detection** at 25+ fps using a fine-tuned YOLOv11m model
+- **Kalman filter tracking** to smooth detections and bridge occlusion gaps
+- **Full pickleball scoring rules** — serve detection, rally tracking, side-out logic, singles & doubles modes
+- **Live web dashboard** — MJPEG video stream, scoreboard, bounce log, and court view
+- **Interactive court calibration** — click 6 points (4 corners + 2 net points) to define the court
+- **IN / OUT bounce detection** using perspective-transformed court coordinates
+- **Match history & video rewind** — every match is saved to SQLite and raw video is recorded for playback
+- **Two-process architecture** — camera/YOLO runs in one process, Flask dashboard in another, connected via shared memory and queues
+- **Windows performance optimisations** — prevents Intel iGPU sleep that causes DroidCam/iVCam FPS drops
+
+---
 
 ## System Architecture
 
-![System Architecture](docs/architecture.png)
+```
+┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
+│         Process 1 — Tracking        │     │       Process 2 — Display        │
+│                                     │     │                                  │
+│  Camera → Capture Thread            │     │  Flask Server                    │
+│              ↓           ┌──────────┼────▶│    /video_feed  (MJPEG 30fps)    │
+│  Save Thread             │ Shared   │     │    /api/matches (match history)  │
+│              ↓           │ Memory   │     │    /           (dashboard UI)    │
+│  YOLO Thread ────────────┘ (8 MB)  │     │                                  │
+│              ↓                      │     │  WebSocket-like state updates    │
+│  Game Logic Thread                  │◀────┼─── cmd_queue (Start/Stop/Pause)  │
+│              ↓           ┌──────────┼────▶│    state_queue (scores/logs)     │
+│  Database (SQLite)       │  IPC     │     │                                  │
+└─────────────────────────────────────┘     └──────────────────────────────────┘
+```
 
-The system consists of:
-- **Camera module** — captures raw video stream and saves it to storage simultaneously
-- **Vision module** — runs YOLOv11 object detection to extract ball coordinates from each frame
-- **Game logic engine** — interprets ball coordinates to track game events and update scores
-- **Dashboard** — displays live scores and post-match analysis via a web interface
-- **Database** — stores event logs for post-match review and video rewind
+| Component | Role |
+|---|---|
+| `main.py` | Entry point — spawns both processes, manages shared memory |
+| `core/ipc.py` | IPC protocol — 8 MB shared memory frame buffer + message queues |
+| `inference/camera.py` | Camera capture, YOLO inference, Kalman tracking, video saving |
+| `core/game_logic.py` | Pickleball scoring engine — rally, serve, bounce, side-out |
+| `core/calibration.py` | Court calibration UI, homography transform (pixel → court cm) |
+| `core/server.py` | Flask server, MJPEG streaming, command handler |
+| `core/database.py` | SQLite match/event/score persistence (WAL mode) |
+| `core/ball_tracker.py` | Constant-velocity Kalman filter for ball trajectory |
+| `core/win_perf.py` | Windows 11 GPU keep-alive and power throttling disable |
+| `dashboard/` | Web UI — scoreboard, live video, event log, calibration modal |
+
+---
 
 ## Project Structure
 
 ```
-code new/
-├── training/
-│   ├── train.py                        # Model training script
-│   ├── custom_dataset.yaml             # Dataset configuration
-│   └── Pickleball Vision.v9i.yolov11/ # Labelled training dataset
+pickleball/
+├── main.py                     # Entry point
+├── config.py                   # Model path and shared config
+├── court.json                  # Saved court calibration (auto-generated)
+├── pickleball.db               # SQLite match database (auto-generated)
+├── core/
+│   ├── ball_tracker.py         # Kalman filter
+│   ├── calibration.py          # Court calibration & homography
+│   ├── database.py             # Match/event/score persistence
+│   ├── game_logic.py           # Scoring engine
+│   ├── ipc.py                  # IPC constants and shared memory spec
+│   ├── server.py               # Flask server & MJPEG stream
+│   └── win_perf.py             # Windows performance optimisations
 ├── inference/
-│   ├── camera.py                       # Live camera capture + processing pipeline
-│   ├── predict.py                      # Batch image prediction
-│   └── prediction image.py            # Single video file prediction
+│   ├── camera.py               # Capture, YOLO, save threads
+│   └── debug_camera.py         # FPS debugging utility
 ├── models/
-│   ├── yolo11m.pt                      # Base YOLOv11 model (pre-trained)
-│   └── yolo11m-custom.pt              # Fine-tuned model (trained on pickleball dataset)
+│   └── best26m-improved3.pt    # Active fine-tuned YOLOv11m model
 ├── dashboard/
-│   ├── index.html                      # Main dashboard UI
+│   ├── index.html              # Main dashboard UI
 │   ├── css/style.css
 │   └── js/main.js
-├── styles/                             # Test videos and images
-└── runs/                               # Training output and prediction results
+├── styles/
+│   └── rewind/                 # Recorded match video output
+└── training/                   # Training scripts and datasets
 ```
+
+---
 
 ## Requirements
 
-- Python 3.10+
-- [Ultralytics YOLO](https://github.com/ultralytics/ultralytics)
-- OpenCV (`opencv-python`)
-- CUDA-capable GPU (recommended for training)
+- **Python** 3.10+
+- **OS:** Windows 10/11 (Linux/macOS: `core/win_perf.py` must be skipped)
+- **GPU:** NVIDIA CUDA GPU recommended for real-time inference
+- **Camera:** USB webcam, DroidCam / iVCam (WiFi), or a video file
 
 Install dependencies:
 
 ```bash
-pip install ultralytics opencv-python
+pip install ultralytics opencv-python flask torch torchvision numpy pillow
 ```
+
+---
 
 ## Usage
 
-### Train the model
+### Run with a video file
+
+```bash
+python main.py --source styles/FixedCamera.mp4
+```
+
+### Run with a live camera
+
+```bash
+python main.py --source 0        # default camera
+python main.py --source 1        # second camera
+```
+
+### Run dashboard only (no source — start tracking from the UI)
+
+```bash
+python main.py
+```
+
+Then open **http://127.0.0.1:5000** in your browser and press **Start** in the dashboard.
+
+---
+
+## Court Calibration
+
+On first run, or after pressing **Calibrate** in the dashboard:
+
+1. A calibration canvas appears in the live video panel
+2. Click **6 points** in order: Top-Left → Top-Right → Bottom-Right → Bottom-Left → Net-Left → Net-Right
+3. Press **Save** — calibration is stored in `court.json` and persists across sessions
+
+The system uses a perspective homography transform to convert pixel coordinates to real court distances (cm), enabling accurate IN/OUT detection.
+
+---
+
+## Model
+
+| Model file | Base | Training |
+|---|---|---|
+| `best26m-improved3.pt` | YOLOv11m | Fine-tuned on Pickleball Vision dataset |
+
+**Dataset:** [Roboflow — Pickleball Vision](https://universe.roboflow.com/liberin-technologies/pickleball-vision/dataset/9)
+
+| Split | Images |
+|---|---|
+| Train | 4,483 |
+| Valid | 737 |
+| Test | 170 |
+
+Training: 100 epochs, 640×640 input, batch size 16, early stopping (25 epochs patience).
+
+To retrain:
 
 ```bash
 python training/train.py
 ```
 
-### Run live detection (camera)
+---
 
-```bash
-python inference/camera.py
-```
+## Dashboard
 
-### Run detection on a video file
+The web dashboard runs at **http://127.0.0.1:5000** and provides:
 
-```bash
-python inference/prediction\ image.py
-```
+| Panel | Contents |
+|---|---|
+| Video feed | Live MJPEG stream with ball detection overlay and court view |
+| Scoreboard | Real-time scores, server indicator, singles/doubles mode |
+| Event log | Live bounce (IN/OUT), serve, and side-out events |
+| Live stats | Points, side-outs, IN/OUT bounce counts, serve count |
+| Controls | Start / Stop / Pause / Rewind / Calibrate / Settings |
 
-### Run batch prediction on images
+---
 
-```bash
-python inference/predict.py
-```
+## Scoring Logic
 
-## Dataset
+The game logic engine in `core/game_logic.py` implements official pickleball rules:
 
-| Split | Images |
-|-------|--------|
-| Train | 4,483  |
-| Valid | 737    |
-| Test  | 170    |
+- **Rally detection** — tracks ball bounces to determine when a rally ends
+- **Serve detection** — velocity threshold (120 px/frame) to identify serve shots
+- **IN / OUT** — point-in-polygon test against the calibrated court polygon
+- **Side-out** — server loses the rally → service passes to opponent
+- **Doubles** — server number (1 or 2) tracked; both players serve before side-out
+- **Manual override** — +/− buttons on dashboard for score correction
 
-- **Source:** [Roboflow — Pickleball Vision v9](https://universe.roboflow.com/liberin-technologies/pickleball-vision/dataset/9)
-- **Classes:** `ball` (1 class)
-- **Format:** YOLOv11
+---
 
-## Model
+## Performance Notes
 
-| Model | Base | Task |
-|-------|------|------|
-| `yolo11m-custom.pt` | YOLOv11m | Ball detection (fine-tuned) |
+The system uses a **2-process design** to avoid Python's GIL blocking YOLO inference during video capture. Video frames are shared between processes via 8 MB POSIX shared memory — fast enough for 1080p at 30fps with no serialisation overhead.
 
-Training configuration: 100 epochs, image size 640×640, batch size 16, early stopping at 25 epochs patience.
+On Windows 11 with DroidCam / iVCam, the Intel iGPU hardware decoder sleeps aggressively under low GPU load, causing FPS drops from 60 → 17. `core/win_perf.py` addresses this by:
+- Keeping a 1×1 pixel OpenGL window rendering at 10fps to hold the iGPU awake
+- Disabling EcoQoS power throttling via Win32 API
+- Raising process priority and setting the Windows timer resolution to 1ms
 
-## Results
+See `PERFORMANCE_NOTES.txt` for the full investigation and fix details.
 
-> Training metrics and graphs will be added after final model training is complete.
+---
 
 ## Roadmap
 
 - [x] Dataset collection and labelling
-- [x] Model training pipeline
-- [x] Camera capture with threaded pipeline
-- [ ] YOLO integration into live camera feed
-- [ ] Game logic engine (scoring)
-- [ ] Dashboard — live scoreboard
-- [ ] Database — event logging
-- [ ] Post-match analysis
+- [x] YOLOv11m model training (multiple iterations)
+- [x] Multi-threaded camera capture pipeline
+- [x] Real-time YOLO ball detection
+- [x] Kalman filter ball tracking
+- [x] Court calibration with perspective homography
+- [x] IN / OUT bounce detection
+- [x] Serve detection
+- [x] Full pickleball scoring engine (singles & doubles)
+- [x] Live web dashboard (MJPEG + scoreboard + event log)
+- [x] SQLite match persistence
+- [x] Match video recording & rewind
+- [x] Match history page
+- [x] Windows GPU performance fixes
+
+---
 
 ## Author
 
-Final Year Project — [Your Name]
-[Your University], [Year]
+Final Year Project — Tong Yung  
+Bachelor of Computer Science, 2026
