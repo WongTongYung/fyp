@@ -1,4 +1,4 @@
-# Pickleball Tracking System
+<img width="1860" height="971" alt="dashboard" src="https://github.com/user-attachments/assets/7057c8b2-9af2-4319-8a4f-99a8119c8a7e" /># Pickleball Tracking System
 
 A real-time pickleball ball tracking and scoring system using **YOLOv11** computer vision, served through a live web dashboard. Designed for a fixed overhead/side camera setup with automatic court calibration, full scoring logic, and post-match video review.
 
@@ -10,10 +10,11 @@ A real-time pickleball ball tracking and scoring system using **YOLOv11** comput
 >
 > **Images:** Drop a `.png` into the `docs/` folder, then replace the line below:
 > ```
-> ![Dashboard Screenshot](docs/dashboard.png)
+> <img width="1860" height="971" alt="dashboard" src="https://github.com/user-attachments/assets/c290e019-ff61-4626-ac8d-3b2271c38b15" />
 > ```
 >
-> **Videos:** On GitHub, open this file for editing → drag and drop an `.mp4` directly into the editor → GitHub uploads it and inserts the embed link automatically.
+
+https://github.com/user-attachments/assets/b89b8c28-d4fb-47b9-9527-6d0dff7da809
 
 ---
 
