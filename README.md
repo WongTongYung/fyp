@@ -37,15 +37,15 @@ A real-time pickleball ball tracking and scoring system using **YOLOv11** comput
 ┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
 │         Process 1 — Tracking        │     │       Process 2 — Display        │
 │                                     │     │                                  │
-│  Camera → Capture Thread            │     │  Flask Server                    │
-│              ↓           ┌──────────┼────▶│    /video_feed  (MJPEG 30fps)    │
-│  Save Thread             │ Shared   │     │    /api/matches (match history)  │
-│              ↓           │ Memory   │     │    /           (dashboard UI)    │
-│  YOLO Thread ────────────┘ (8 MB)  │     │                                  │
-│              ↓                      │     │  WebSocket-like state updates    │
-│  Game Logic Thread                  │◀────┼─── cmd_queue (Start/Stop/Pause)  │
-│              ↓           ┌──────────┼────▶│    state_queue (scores/logs)     │
-│  Database (SQLite)       │  IPC     │     │                                  │
+│  Camera → Capture Thread ┌──────────┼────▶│  Flask Server                    │
+│           ↙         ↘    │ Shared   │     │    /video_feed  (MJPEG 30fps)    │
+│     Save Thread  YOLO    │ Memory   │     │    /api/matches (match history)  │
+│               Thread     └─(8 MB)   │     │    /           (dashboard UI)    │
+│                   ↓                 │     │                                  │
+│           Game Logic Thread         │     │  SSE state updates               │
+│                   ↓      ┌──────────┼────▶│    state_queue (scores/logs)     │
+│           Database(SQLite)│  IPC    │◀────┼─── cmd_queue (Start/Stop/Pause)  │
+│  Cmd Listener Thread ◀───┘          │     │                                  │
 └─────────────────────────────────────┘     └──────────────────────────────────┘
 ```
 

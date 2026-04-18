@@ -528,16 +528,19 @@ def rewind_feed():
         with open(clip_path, 'rb') as f:
             header = f.read(8)
             count, fps = struct.unpack('<II', header)
-            delay = 1.0 / fps if fps > 0 else 1.0 / 30
-            for _ in range(count):
-                size_data = f.read(4)
-                if not size_data:
-                    break
-                size = struct.unpack('<I', size_data)[0]
-                jpeg = f.read(size)
-                yield (b'--frame\r\n'
-                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
-                time.sleep(delay)
+        delay = 1.0 / fps if fps > 0 else 1.0 / 30
+        while True:
+            with open(clip_path, 'rb') as f:
+                f.seek(8)  # skip header
+                for _ in range(count):
+                    size_data = f.read(4)
+                    if not size_data:
+                        break
+                    size = struct.unpack('<I', size_data)[0]
+                    jpeg = f.read(size)
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
+                    time.sleep(delay)
 
     return Response(generate(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')

@@ -1,7 +1,7 @@
 import queue
+import struct
 import time
 import os
-import struct
 import ctypes
 import cv2
 from collections import deque

@@ -162,7 +162,6 @@ document.getElementById('matchHistoryBtn').addEventListener('click', function ()
 document.getElementById('rewindBtn').addEventListener('click', function () {
     if (!isRunning) return;
 
-    // Send rewind command — pauses capture and writes a new rewind clip
     fetch('/rewind', { method: 'POST' })
         .then(r => r.json())
         .then(() => {

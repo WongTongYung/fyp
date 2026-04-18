@@ -347,7 +347,13 @@ if __name__ == "__main__":
     display_proc.start()
     logging.info("[Process-2 Display] Started (PID: %d)", display_proc.pid)
 
-    time.sleep(1)
+    import socket
+    for _ in range(30):
+        try:
+            socket.create_connection(("127.0.0.1", 5000), timeout=1).close()
+            break
+        except OSError:
+            time.sleep(0.5)
     webbrowser.open("http://127.0.0.1:5000")
 
     # --- Tracking Process (Process 1 = this process) ---
