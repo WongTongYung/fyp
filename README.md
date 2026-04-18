@@ -34,21 +34,7 @@ https://github.com/user-attachments/assets/b89b8c28-d4fb-47b9-9527-6d0dff7da809
 
 ## System Architecture
 
-```
-┌─────────────────────────────────────┐     ┌──────────────────────────────────┐
-│         Process 1 — Tracking        │     │       Process 2 — Display        │
-│                                     │     │                                  │
-│  Camera → Capture Thread ┌──────────┼────▶│  Flask Server                    │
-│           ↙         ↘    │ Shared   │     │    /video_feed  (MJPEG 30fps)    │
-│     Save Thread  YOLO    │ Memory   │     │    /api/matches (match history)  │
-│               Thread     └─(8 MB)   │     │    /           (dashboard UI)    │
-│                   ↓                 │     │                                  │
-│           Game Logic Thread         │     │  SSE state updates               │
-│                   ↓      ┌──────────┼────▶│    state_queue (scores/logs)     │
-│           Database(SQLite)│  IPC    │◀────┼─── cmd_queue (Start/Stop/Pause)  │
-│  Cmd Listener Thread ◀───┘          │     │                                  │
-└─────────────────────────────────────┘     └──────────────────────────────────┘
-```
+![System Architecture](docs/architecture.png)
 
 | Component | Role |
 |---|---|
