@@ -1,0 +1,1033 @@
+Faculty of Computer Science and Information Technology
+
+               YOUR PROJECT TITLE GOES HERE
+
+                                Your Name Goes Here
+
+                  Bachelor of Computer Science with Honours
+                                (Software Engineering)
+                                            2026
+                           Your Project Title Goes Here
+
+                                       Your Name Goes Here
+
+                                          A thesis submitted
+In partial fulfilment of the requirements for the degree of Bachelor of Computer Science
+
+                                             with Honours
+                                       (Software Engineering)
+
+                  Faculty of Computer Science and Information Technology
+                            UNIVERSITI MALAYSIA SARAWAK
+                                                  2021
+                                            DECLARATION
+
+I declare that the work in this thesis was carried out in accordance with the regulations of
+Universiti Malaysia Sarawak. Except where due acknowledgements have been made, the
+work is that of the author alone. The thesis has not been accepted for any degree and is not
+concurrently submitted in candidature of any other degree.
+
+.................................
+
+Signature
+
+Name:                              Your Name Goes Here
+
+Matric No.:                        123456
+
+Faculty of Computer Science and Information Technology
+
+Universiti Malaysia Sarawak
+
+Date :
+
+                                           i
+                                      ACKNOWLEDGEMENT
+I would like to take this opportunity to those who have contributed directly or indirectly to
+this guidebook.
+My sincere gratitude to the Faculty of Computer Science and Information Technology, for
+the advice and support given during my period of study in Universiti Malaysia Sarawak.
+Finally, I would like to thank the management of the Universiti Malaysia Sarawak for
+making it possible for me to complete my study here in Sarawak. Thank you all.
+This template is prepared using the CGS UNIMAS legacy thesis template.
+
+                                                      ii
+                                               ABSTRACT
+The abstract is a summary of the thesis, which consists of a brief introduction, problem
+statement, investigation methods, results and the general conclusion. The abstract should
+be informative and clear as reference to others. It should be written in a single paragraph
+and the maximum page number is 2 pages. Font type is Times New Roman and the font
+size is 12. Line spacing is double-spacing with a maximum of two-page long. Keywords of
+up to 5 words should be provided. For a thesis written in English, a translated version of
+the abstract in Malay should be provided and vice versa. The translated version of the
+abstract should have the thesis title.
+Keywords: Summary, format, font size, abstract, keywords
+
+                                                      iii
+    Garispanduan Tesis: Gaya dan Format untuk Program Pengajian Pascasiswazah
+                                                ABSTRAK
+
+Abstrak adalah ringkasan tesis, mengandungi pengenalan, kenyataan permasalahan,
+kaedah penyiasatan, keputusan dan kesimpulan umum. Abstrak hendaklah informatif dan
+jelas sebagai rujukan. Ianya mesti ditulis dalam satu perenggan dan maksimum mukasurat
+adalah dua mukasurat. Jenis fon adalah Times New Roman dan saiz fon adalah 12. Jarak
+baris adalah baris berganda dengan panjang maksimum dua mukasurat. Kata kunci
+sehingga 5 patah perkataan hendaklah diberikan. Bagi tesis yang ditulis di dalam Bahasa
+Inggeris, versi terjemahan dalam Bahasa Melayu hendaklah diberikan dan sebaliknya.
+Abstrak yang telah diterjemahkan mesti mengandungi tajuk tesis.
+Kata kunci: Kesimpulan, format, saiz fon, abstrak, kata kunci
+
+                                                      iv
+                                       TABLE OF CONTENTS  Page
+                                                               i
+DECLARATION                                                   ii
+ACKNOWLEDGEMENT
+ABSTRACT                                                     iii
+ABSTRAK                                                      iv
+TABLE OF CONTENTS                                             v
+LIST OF TABLES                                                x
+LIST OF FIGURES                                              xi
+LIST OF ABBREVIATIONS                                       xii
+CHAPTER 1: INTRODUCTION                                       1
+1.1 Study Background                                          1
+1.2 Problem Statement                                         1
+1.3 Objectives                                                2
+1.4 Chapter Summary                                           2
+CHAPTER 2: FORMAT OF THE THESIS                               3
+2.1 Overview                                                  3
+2.2 Language and Units                                        3
+2.3 Typing                                                    3
+
+                                                      v
+2.3.1 Font                                       3
+
+2.3.2 Spacing                                    4
+
+2.3.3 Type Quality                               4
+
+2.4 Margins                                      4
+
+2.5 Pagination                                   4
+
+2.6 Paper                                        5
+
+2.7 Inserting Tables                             5
+
+2.8 Inserting Figures                            6
+
+2.9 Inserting Equations                          7
+
+2.10 Bindings                                    7
+
+2.10.1 Bindings for Thesis Evaluation            8
+
+2.10.2 Bindings of Thesis after Senate Approval  8
+
+2.11 Chapter Summary                             8
+
+CHAPTER 3: STRUCTURE OF THE THESIS               9
+
+3.1 Overview                                     9
+
+3.2 Thesis Outline                               9
+
+3.2.1 Title Page                                 10
+
+3.2.2 Declaration                                10
+
+3.2.3 Acknowledgement                            10
+
+3.2.4 Abstract                                   10
+
+                                       vi
+3.2.5 Abstrak                                     11
+
+3.2.6 Table of Contents                           11
+
+3.2.7 List of Tables                              11
+
+3.2.8 List of Figures                             11
+
+3.2.9 List of Abbreviations                       12
+
+3.2.10 References                                 12
+
+3.2.11 Appendix(ces)                              12
+
+3.3 Chapter Outline                               12
+
+3.3.1 Introduction                                13
+
+3.3.2 Literature Review                           13
+
+3.3.3 Materials and Methods                       13
+
+3.3.4 Results and Discussion                      13
+
+3.3.5 Conclusions and Recommendations             13
+
+3.4 Chapter Summary                               14
+
+CHAPTER 4: LITERATURE CITATION AND REFERENCING    14
+
+4.1 Overview                                      14
+
+4.2 Citation in Text                              14
+
+4.2.1 Direct Citation of Author's Name in Text    14
+
+4.2.2 Indirect Citation of Author's Name in Text  16
+
+4.2.3 No Authors                                  16
+
+                                       vii
+4.2.4 Corporate Authors                                     16
+
+4.2.5 No Date                                               16
+
+4.2.6 Secondary Referencing                                 17
+
+4.2.7 Websites                                              17
+
+4.3 Referencing                                             17
+
+4.3.1 Reference from Books                                  18
+
+4.3.2 Chapters of Edited Books                              18
+
+4.3.3 Books Which Have Been Translated                      19
+
+4.3.4 E-books                                               20
+
+4.3.5 Reference from Journals and Newspapers                20
+
+4.3.6 Reference from Conference Proceedings                 20
+
+4.3.7 Standards                                             21
+
+4.3.8 Patent                                                21
+
+4.3.9 Multiple Works from the Same Author in the Same Year  22
+
+4.3.10 Anonymous (Authorless) Reference                     22
+
+4.3.11 Publications of International Bodies/Agencies        22
+
+4.3.12 Websites                                             23
+
+4.4 Chapter Summary                                         23
+
+CHAPTER 5: CONCLUSION AND RECOMMENDATIONS                   24
+
+5.1 Conclusion                                              24
+
+                                         viii
+5.2 Recommendations      24
+
+REFERENCES               25
+
+APPENDICES               29
+
+                     ix
+                                           LIST OF TABLES  Page
+                                                               5
+Table 2.1 Example of a Table                                   5
+Table 2.2 Example of a Long Table                              9
+Table 3.1 Thesis Outline                                      12
+Table 3.2 Chapter Outline
+
+x
+                                          LIST OF FIGURES  Page
+Figure 2.1 Example of a Figure                                 7
+
+xi
+        LIST OF ABBREVIATIONS
+
+FCSIT   Faculty of Computer Science and Information Technology
+UNIMAS  Universiti Malaysia Sarawak
+
+        xii
+                                              CHAPTER 1
+
+                                           INTRODUCTION
+
+1.1 Study Background
+         The objective of the template you are currently using is to provide a tool to prepare
+
+the largest document you are ever likely to have to manage. The template is an experiment
+and a work in progress. We hope you will be able to download this document, cut and
+paste your own content into the template, and then use the format paintbrush for the text,
+headings and sub-headings, table headings, table format, figure headings etc. The real goal
+is to lower the overall stress of producing something that meets the various demands of the
+university and academic communities.
+
+         A thesis/dissertation is a form of expository writing. As a piece of intellectual work,
+it seeks to document the student's exploration of a question significant to a particular
+discipline or set of disciplines in a way that is organized and discipline-appropriate. Every
+thesis should begin with Chapter 1 entitled Introduction. The Introduction typically
+includes the background to the work, an introduction to the overarching themes and
+concepts, and goals of the dissertation. The Introduction also provides the reader with a
+description of the structure of the document, by describing the sequence of the chapters,
+and possibly a brief description of the intention of each.
+
+1.2 Problem Statement
+         There are many formats available for writing final thesis. The formats have been
+
+introduced to assist undergraduate students in preparing their thesis. However, the formats
+are unique and could not be used for other universities. Therefore, a standard format for
+
+                                                      1
+every Universiti Malaysia Sarawak (UNIMAS) student to follow will enable all
+undergraduate students to produce their thesis according to the format set by the university.
+
+1.3 Objectives
+         The guidebook aims to assist undergraduate research students in writing their final
+
+thesis. This can be achieved through the following set of objectives:
+
+     i. To identify important components of thesis
+
+     ii. To formulate a standard format for thesis writing
+
+     iii. To propose a guidebook for thesis writing
+
+1.4 Chapter Summary
+
+     This chapter has provided the general introduction about this guidebook which
+
+serves as reference to all undergraduate students at UNIMAS. All students are required to
+
+use  this            guidebook     as                       their  reference.
+
+                                2
+                                              CHAPTER 2
+                                    FORMAT OF THE THESIS
+
+2.1 Overview
+         Format of the thesis will provide information on how the thesis should be written. It
+
+consists of Language and Units, Margin, Typing, Pagination, Paper and Thesis Structure.
+These will be explained further in the following subsections.
+2.2 Language and Units
+
+         The language of the thesis should be as direct and simple, as the subject matter will
+allow. The thesis must be written: in either English or Bahasa Malaysia.
+
+         For thesis written in English, the language used must be fully British or American
+style, and not a mixture of both.
+
+         All units of measurement must be in the metric system.
+2.3 Typing
+
+         Typing format must be fully adhered by all students. The font type and size must
+follow the given format and the final submitted must be produced in high quality printing.
+2.3.1 Font
+
+         All students are to use Times New Roman (font size 12) only in their theses. In
+certain cases, the use of other font types may be considered upon approval by the Faculty
+Graduate Committee.
+
+                                                      3
+2.3.2 Spacing
+         The thesis should by typed on one side of the page. The text should be double-
+
+spaced throughout, including explanatory footnotes, long quotations, appendices, headings
+and subheadings. However, legends, captions or keys to tables, figures, or plates should
+be single-spaced.
+
+2.3.3 Type Quality
+         Both copies of the thesis submitted for examination or binding must be printed
+
+using laser printer.
+
+2.4 Margins
+         The top, bottom and left-hand page margins of all pages should be 3 cm wide,
+
+with the right-hand page margin should be 2.5 cm wide.
+
+2.5 Pagination
+         Pagination should be given to all pages excluding the cover page and the title page.
+
+Pages should be numbered consecutively throughout the thesis, including pages of figures,
+tables and appendices.
+
+  i. Pagination begins with the first page of Chapter 1.
+  ii. Preliminary pages (i.e. those preceding Chapter 1) must carry page numbers in
+
+         small Roman numerals (i, ii, iii, etc.).
+ iii. Page numbers should be centered at the bottom of the page and should be at least
+
+         20 mm from the edge of the page.
+ iv. Page numbers should appear by themselves and are not to be enclosed in
+
+         parentheses, hyphens, etc.
+
+                                                      4
+  v. Each appendix should be identified separately in alphabetical order.
+ vi. The pages of the appendices should also be typed according to the above pagination
+
+         system.
+
+2.6 Paper
+         White, good-quality A4 size, (8.27" x 11.69" or 21.0 cm x 29.7 cm) and weight of
+
+80gm should be used for all submitted bound copies of the thesis. Photographic
+illustrations should be colour-printed on good quality high-resolution paper. This paper
+should be acid free and "non-erasable".
+
+2.7 Inserting Tables
+         Number the tables by chapter; e.g. Table 1.1 and Table 1.2 to indicate the tables
+
+belong to Chapter 1. Whereas, Table 2.1 and Table 2.2 belong to Chapter 2 and so on. Title
+for the table should be placed above the table. Table 2.1 shows an example of a table and
+Table 2.2 shows an example of a long table (requires more than 1 page).
+
+           Table 2.1: Example of a Table
+
+     No.            Item       Unit (m)
+
+     1.     Length             5
+
+     2.     Width              4
+
+         Table 2.2: Example of a Long Table
+
+S/N  Model          Frequency     Antenna Type
+
+I    Zenstar III    Single        Built In Antenna
+
+2    HULUX GR- Single             Built In Antenna
+
+     213U
+
+                          5
+Table 2.2 continued
+
+3  SkyNavSKM55 Single        Embedded Patch
+                             Antenna 25 X 25 X
+                             4.0 Mm
+
+4  GPS Receiver, Single      Internal Antenna,
+
+   GNS 603                   Provision         of
+
+                             External Antenna
+
+5  Garmin            Single  External
+
+   GPS25-HVS
+
+6  GISTM             Dual    External
+
+   Stations
+
+2.8 Inserting Figures
+         Number the figures by chapter; e.g. Figure 1.1 and Figure 1.2 to indicate the tables
+
+belong to Chapter 1. Whereas, Figure 2.1 and Figure 2.2 belong to Chapter 2 and so on.
+Title for the figure should be placed at below the table. Figure 2.1 shows an example of a
+figure.
+
+                     6
+                                 Figure 2.1: Example of a Figure
+2.9 Inserting Equations
+
+         Number the equation by chapter, e.g. Equation 1.1 and Equation 1.2 to indicate the
+tables belong to Chapter 1. Whereas, Equation 2.1 and Equation 2.2 belong to Chapter 2
+and so on. Example is given below:
+
+                                                                                            Equation 2.1
+                                                                                            Equation 2.2
+
+2.10 Bindings
+         Bindings of the thesis shall be the responsibility of the students. There are two (2)
+
+different types of bindings.
+
+                                                      7
+2.10.1 Bindings for Thesis Evaluation
+         Following acceptance and approval by the UNIMAS Graduate Studies Committee,
+
+the thesis should be ring bound in soft cover prior to examination by the internal and
+external examiners.
+
+         The front cover of the thesis shall be printed according to the colour of the
+Faculty/Institute together with the UNIMAS logo and name of the Faculty/Institute
+(Appendix A). Please refer to Appendix B for the colour of the Faculty/Institute.
+
+2.10.2 Bindings of Thesis after Senate Approval
+         Thesis which has been accepted by the UNIMAS Senate must be submitted in hard
+
+bound. The student's name, degree and year shall also be printed on the spine of the bound
+thesis.
+
+         Stripes according to the colour of the Faculty/Institute shall be printed on the back
+cover and spine to distinguish between a PhD (3 stripes) and Master (2 stripes). Please
+refer to Appendix C for example.
+
+2.11 Chapter Summary
+
+    This chapter has summarized the format required for the thesis writing which must
+
+be  followed          by     all  graduate  students.
+
+                          8
+            CHAPTER 3
+STRUCTURE OF THE THESIS
+
+3.1 Overview
+         In this chapter, structure of the thesis is explained in details. Students are advised to
+
+read and produce the thesis according to the thesis outline and chapter outline.
+
+3.2 Thesis Outline
+         Students should bear in mind that thesis examiners deplore overlong or verbose
+
+thesis, and the onus is on the student to provide a well-organized and well-written thesis.
+Table 3.1 shows the thesis outline.
+
+Table 3.1: Thesis Outline
+
+  No.               Item
+   i.  Title Page
+  ii.  Declaration
+ iii.  Acknowledgement
+ iv.   Abstract
+  v.   Abstrak
+ vi.   Table of Contents
+vii.   List of Tables
+viii.  List of Figures
+ ix.   List of Abbreviations
+  x.   Chapter 1 ­ Chapter 5
+ xi.   References
+xii.   Appendix (ces)
+
+       9
+3.2.1 Title Page
+         The thesis title should be as concise as possible, giving an accurate description of
+
+the thesis. The standard format of the title must be in title case except for biological
+nomenclature.
+
+3.2.2 Declaration
+         Student must declaration that work done is from his/her original work with
+
+acknowledgement given for information obtained from other sources. This is also to
+declare that the research work has never been declared for any other degree at UNIMAS or
+other institution. Follow the sample given in the Declaration page.
+
+3.2.3 Acknowledgement
+         Most theses will include a brief statement of gratitude in recognition of special
+
+assistance (including financial) and guidance given by individuals, institutions or
+government bodies. Acknowledgement page should not exceed one (1) page.
+
+3.2.4 Abstract
+         The abstract is a summary of the entire thesis. It should briefly outline the research
+
+problems addressed by the thesis, the findings, and the significance of the work in the
+context of the field of study.
+
+         Abstracts in both Bahasa Malaysia and English are mandatory. The English version
+must include the title in English for a thesis written in Bahasa Malaysia, and vice versa.
+
+         The abstract should not exceed two (2) typewritten double-spaced pages of text
+consistent with the font style and size used in the main body of the thesis. The font style of
+the translated abstract should be in Italics.
+
+                                                     10
+3.2.5 Abstrak
+         This is the Malay translation of the abstract. It should have the translated title of the
+
+thesis. Refer to the Abstrak page of this guidebook.
+3.2.6 Table of Contents
+
+         The titles of sections, chapters and their principal subdivisions along with the page
+numbers on which they appear should be listed in the Table of Contents. Titles should be
+worded exactly as they appear in the text of the thesis. Theses with many subsections
+should use a hierarchical numbering system for headings and sub-headings (e.g. 3.0, 3.1,
+3.2 etc.). Such numbering system combined with the judicious use of upper and lower case,
+indentations and italics should indicate clear relationships between the sections of the
+thesis.
+3.2.7 List of Tables
+
+         This list consists of the exact titles (including numbering) of all tables and should
+be written in double-spacing format. Please refer to the List of Tables page. All tables
+should be numbered consecutively throughout the text based on the thesis chapter.
+3.2.8 List of Figures
+
+         This list consists of the exact titles (including numbering) of all figures and should
+be written in double-spacing format. Please refer to the List of Figures page. All figures
+should be numbered consecutively throughout the text based on the thesis chapter.
+
+                                                     11
+3.2.9 List of Abbreviations
+         This list consists of the abbreviations used in the thesis and should be written in
+
+double-spacing format. Please refer to the List of Abbreviations page. The abbreviations
+should be arranged based on the alphabetical order.
+
+3.2.10 References
+         Referencing should be done according to the format given in this guidebook. Please
+
+refer to Section 4.3 for details.
+
+3.2.11 Appendix(ces)
+         Appendix (es) is a supplementary material attached at the end of the thesis.
+
+3.3 Chapter Outline
+         The main body of the thesis is usually arranged into consecutively numbered
+
+chapters or sections. The internal organization of the thesis is the responsibility of the
+student in consultation with his/her thesis supervisor(s). The organization will partly
+depend on the field of study, but the onus is on the student to provide a systematic and
+well-organized thesis. The thesis will often include the chapters as given in Table 3.2.
+
+Table 3.2: Chapter Outline
+
+Chapter                      Item
+
+Chapter 1 Introduction
+
+Chapter 2 Literature Review
+
+Chapter 3 Materials and Methods
+
+Chapter 4 Results and Discussion
+
+Chapter 5 Conclusion and Recommendations
+
+         12
+3.3.1 Introduction
+         The chapter provides general overview of the thesis and should end with a
+
+hypothesis (if applicable) and objectives of the study.
+
+3.3.2 Literature Review
+         This should highlight past studies related to the subject of the thesis. Recent
+
+publications (last 5 years) should be discussed in this chapter.
+
+3.3.3 Materials and Methods
+         All relevant experimental, descriptive, theoretical and analytical techniques used in
+
+the research should be outlined, such that the study could be repeated by another
+researcher. Reference of methods to other researchers should be made where appropriate.
+
+3.3.4 Results and Discussion
+         This may be presented as a single chapter, divided into appropriate section, in two
+
+or more separate chapters where it includes the analysis and presentation of data. This
+chapter also provides a general discussion on the results of the study, stressing the
+significance and implications of the findings of the research project undertaken.
+
+3.3.5 Conclusions and Recommendations
+         This chapter contains a brief summary of the entire work, including methods,
+
+results and major conclusions/recommendations arising from the work. The summary can
+be written in a single section or in separate numbered section. Recommendations for future
+work are optional.
+
+                                                     13
+3.4 Chapter Summary
+         The structure of the thesis has been explained in this chapter and should consist of
+
+the introduction, literature review, materials and method, results and discussion and finally
+the conclusions and recommendations.
+
+                                              CHAPTER 4
+
+                      LITERATURE CITATION AND REFERENCING
+
+4.1 Overview
+         Chapter 4 explains how literature citation and referencing should be written in the
+
+thesis. Proper citation and referencing must be used for any information and finding from
+other works cited or quoted in the thesis. UNIMAS follows the latest version of APA or
+Harvard for literature citation and referencing.
+
+4.2 Citation in Text
+         Author's name may be cited directly or indirectly in the text. There will also be a
+
+situation when no author's name is available. The followings will explain how citation
+should be done.
+
+4.2.1 Direct Citation of Author's Name in Text
+         In the text, the year of publication appears within parentheses after the author's
+
+surname if the latter forms part of a sentence. For example:
+
+         i. Abdul (1986) or
+         ii. Abdul and Abidin (1987) ­ where there are only two authors or,
+         iii. Abidin et al. (1990) ­ where there are more than two authors
+
+                                                     14
+         iv. Abdul et al. (1990); Abidin et al. (1991)
+         If several papers by the same author(s) and from the same year are cited, the letters
+a, b, c, etc. should be put after the year of publication. For example:
+         i. Abdul and Abidin (2017a) and
+         ii. Abdul and Abidin (2017b)
+         Both the author's surname and the year of publication appear within parentheses if
+the author's surname does not form part of a sentence. For example:
+         i. (Abdul and Abidin, 2017b)
+         ii. (Johan & Eli, 2016).
+         In any particular sentence, if several publications are cited, the references should be
+cited in chronological order. For example:
+         i. Johan (2014) and Eli (2015) have both shown...
+         ii. Abdul et al. (2010) and Abidin (2017) have obtained...
+         However, if several publications of the same year are cited the references should be
+cited in alphabetical order, with single author taking precedence over joint authors. For
+example:
+         i. Abidin (2015), Abdul and Johan (2015) and Eli (2015) found that...
+
+                                                     15
+4.2.2 Indirect Citation of Author's Name in Text
+         The author's name and publication year should be placed at any relevant point in
+
+the sentence or at the end of the sentence in brackets if reference is made to any research
+finding of other work without mentioning the author in the text.
+
+Example:
+         Open space result for measurement conducted in the mid-latitude region has shown
+         minimum effect of ionosphere on the received satellite signal (Abidin et al., 2007).
+
+4.2.3 No Authors
+         For any reference from which the author is not available, it should be cited as:
+
+(Anonymous, 2016).
+
+Example:
+         Placing the GPS receiver directly facing the sky will improve the received signal
+         strength. (Anonymous, 2014).
+
+4.2.4 Corporate Authors
+         Reference made from any organization or bodies/agencies with no personal author
+
+should be written as: (MCMC, 2009).
+
+Example:
+         Currently, MCMC (2012) is monitoring...
+
+4.2.5 No Date
+         If the publication year is not available, the abbreviation n.d should be used.
+
+Example:
+
+                                                     16
+         Directly: Abidin (n.d.) has performed measurement... Indirectly: Previous findings
+         (Abidin, n.d.) has justified....
+4.2.6 Secondary Referencing
+         You may come across a summary of another author's work in the source you are
+reading, which you would like to make reference to in your document. This is called
+secondary referencing.
+
+Example:
+         Direct reference: Recently, measurement performed in Fukuoka by Abidin (2006
+         cited in Bong, 2015) found that... Abidin (2006) as cited in Bong (2015) suggests
+         that...
+         Indirect reference: (Abidin, 2006 cited in Bong, 2015)
+
+4.2.7 Websites
+         For any material obtained from a website, the authorship of the website should be
+
+identified, either by author's surname or organization's name. URL or website address
+should not be written in the text. For example: Recent research on the ionospheric effect
+(Abba, 2015) has indicated...
+4.3 Referencing
+
+         All references should follow the latest version of the APA or Harvard. The
+references should be double-spaced with Times New Roman using font size 12. The
+following referencing style must be followed:
+
+                                                     17
+4.3.1 Reference from Books
+         Author's surname, Initials. (Year). Title of book, Edition., (only include this if not
+
+the first edition) Place of publication: (this must be a town or city, not a country) Publisher.
+Examples:
+
+         Single author:
+                  Conn, E. E. (1987). Outlines of Biochemistry, 5th ed., New York: John
+                  Wiley & Sons.
+
+         Two or more authors:
+                  Kalpakjian, S., and Schmid, S. R. (2001). Manufacturing Engineering and
+                  Technology, 4th ed., New Jersey: Prentice-Hall.
+
+4.3.2 Chapters of Edited Books
+         Chapter author(s) surname(s), Initials. (Year). Chapter followed by In Title of book
+
+(Book editor(s) initials and surnames, edition), page number, Place of publication:
+Publisher.
+Example:
+
+         Horking, A. D. (1988). Moulds and Yeasts Associated with Foods of Reduced
+         Water Activity: Ecological Interactions. In Food Preservation by Moisture Control
+         (Seow, C. C., 2nd ed.), pp. 57-72. London: Elsevier Applied Science Publication.
+
+                                                     18
+4.3.3 Books Which Have Been Translated
+         Author. (Year). Title of book. Translated from (language). Place of publication:
+
+Publisher.
+Example:
+
+         Yahya, R. (2005). Hidraulik dan Pneumatik. Translated from English. Johor,
+         Malaysia: UTM Press.
+
+                                                     19
+4.3.4 E-books
+         The required elements for e-books accessed from the University Library or other
+
+sources: Author, Initials. (Year). Title of book. [e-book] Place of publication: Publisher.
+Followed by "Available through:" include e-book source/database, web address or URL
+[Accessed date].
+
+Example:
+
+Fishman, R. (2005). Ceramic Processing. [e-book] Chester: Castle Press. Available
+
+through:  Universiti  Teknikal                Malaysia  Melaka  Library
+
+<http://library.utem.edu.my> [Accessed on 14 September 2010].
+
+4.3.5 Reference from Journals and Newspapers
+
+         Author, Initials. (Year). Title of article. Full title of journal, Volume number (Issue
+/ Part number), Page numbers.
+
+Example for journal article:
+         Kalotas, T. M., & Lee, A. R. (1990). A Simple Device to Illustrate Angular
+         Momentum Conservation and Instability. American Journal of Physics, 58(6), 80 -
+         81.
+
+Example for newspaper:
+         Kipper, D. (2008). Japan's New Dawn. The Times, 3 Sep, pp.10.
+
+4.3.6 Reference from Conference Proceedings
+         Author, Initials., Year. Full title of conference paper. In: followed by editor or
+
+name of organization, Full title of conference. Location, Date, Place of publication.
+
+                      20
+Example:
+         Hassan, M.D., & Norshimah, H., 1996. Designing of Primers for Cloning of Papaya
+         Ringspot Virus Coat Protein Gene. In: Hasanah, M.G., Khatijah, M.Y., and
+         Marziah, M. (Eds.), Proceedings of the 8th National Biotechnology Seminar,
+         Selangor, Malaysia, 24 ­ 27 May 1996. UKM Publisher.
+
+4.3.7 Standards
+         Corporate author. (Year). Identifying letters and numbers and full title of the
+
+standards. Place of publication: Publisher.
+Example:
+
+         International Standards Office. (1998). ISO 690 ­ 2 Information and
+         documentation: Bibliographical references. Geneva: ISO.
+4.3.8 Patent
+         Inventor name, Initials., Assignee. (Year). Title. Place. Patent number (status, if an
+application).
+Example:
+         Leonard, Y., Super Sports Limited. (2008). Tin Can Manufacture and Method of
+         Sealing. Canada. Pat. 12, 789, 675.
+
+                                                     21
+4.3.9 Multiple Works from the Same Author in the Same Year
+Example:
+
+         Reed, R. C. (2006a). The Superalloys ­ Fundamentals and Applications,
+         Cambridge: Cambridge University Press.
+         Reed, R. C. (2006b). Fusion Welding of Superalloys, London: Macmillan.
+4.3.10 Anonymous (Authorless) Reference
+         Depending on the type of document, replace the authorship with Anonymous.
+Example:
+         Anonymous. (1996). External Trade in Sago Flour and Sago Starch, 1985-1995.
+         Agricultural Statistics, Sarawak. Planning Division, Department of Agriculture,
+         Sarawak, Malaysia.
+4.3.11 Publications of International Bodies/Agencies
+         Depending on the type of source, replace the author's name with the organization
+name.
+Example:
+         WHO. (1984). Environmental Health Criteria 39: Paraquat and Diquat. World
+         Health Organization, Geneva.
+
+                                                     22
+4.3.12 Websites
+         Authorship or Source. (Year). Title of web document or web page. [type of
+
+medium] (date of update if available) Available at: include website address or URL
+[Accessed date].
+
+         Bowman. R. (2009). Superalloys: A Primer and History. [online] Available at:
+         http://www.tms.org/Meetings?Specialty/superalloy2000/SuperalloyHistory. html
+         [Assessed on 8 November 2010]
+4.4 Chapter Summary
+         This chapter has provided guideline on how the literature citation and referencing
+should be written in the thesis. All undergraduate students are advised to consult the Centre
+for Graduate Studies for further clarification.
+
+                                                     23
+                                              CHAPTER 5
+                        CONCLUSION AND RECOMMENDATIONS
+5.1 Conclusion
+         This thesis guideline has been prepared as guidance to all graduate students at
+UNIMAS in the preparation of their thesis for evaluation and final endorsement by the
+university Senate.
+5.2 Recommendations
+         The availability of a writing tool that can easily assist all undergraduate students in
+preparing their final thesis will significantly reduce the time required to write thesis.
+FCSIT will continuously make effort in improving the quality of the thesis produced by
+students.
+         Students are highly encouraged to learn and use the thesis template provided in
+preparing their final thesis for evaluation or final submission to graduate.
+
+                                                     24
+                                             REFERENCES
+
+Acti, T., Chauraya, A., Zhang, S., Whittow, W. G., Seager, R., Vardaxoglou, J. C., & Dias,
+         T. (2015). Embroidered wire dipole antennas using novel copper yarns. IEEE
+         Antennas and Wireless Propagation Letters, 14, 638­641.
+
+Adamu, S. A., Masri, T., Abidin, W. A. W. Z., Ping, K. H., & Babale, S. A. (2018). High-
+         gain modified antipodal Vivaldi antenna for ultra-wideband applications. Journal of
+         Telecommunication, Electronic and Computer Engineering, 10(1­12), 55­59.
+
+Ba, H. C., Shirai, H., & Ngoc, C. D. (2014). Analysis and design of antipodal Vivaldi
+         antenna for UWB applications. In Proceedings of the IEEE 5th International
+         Conference on Communications and Electronics, (pp. 391­394).
+
+Capano, D. E. (2014). Antenna basics, antenna types, antenna functions. Control
+         Engineering, 61(9), 18­20.
+
+Chen, L., Lei, Z., Yang, R., Fan, J., & Shi, X. (2015). A broadband artificial material for
+         gain enhancement of antipodal tapered slot antenna. IEEE Transactions on
+         Antennas and Propagation, 63(1), 395­400.
+
+Dastranj, A. (2015). Wideband antipodal Vivaldi antenna with enhanced radiation
+         parameters. IET Microwaves, Antennas & Propagation, 9(15), 1755­1760.
+
+Elmansouri, M. A., & Filipovic, D. S. (2012). Low-dispersion spiral antennas. IEEE
+         Transactions on Antennas and Propagation, 60(12), 5522­5530.
+
+Elsheakh, D. M., Eltresy, N. A., & Abdallah, E. A. (2017). Ultra wide bandwidth high gain
+         Vivaldi antenna for wireless communications. Progress In Electromagnetics
+         Research Letters, 69, 105­111.
+
+Fang, G., & Sato, M. (2002). Optimization of Vivaldi antenna for demining by GPR. In
+
+                                                     25
+         Proceedings of the 2002 Interim International Symposium on Antennas and
+         Propagation (pp. 263­266).
+Fei, P., Jiao, Y. C., Hu, W., & Zhang, F. S. (2011). A miniaturized antipodal vivaldi
+         antenna with improved radiation characteristics. IEEE Antennas and Wireless
+         Propagation Letters, 10, 127­130.
+Gao, X., Shen, Z., & Hua, C. (2015). Conformal VHF log-periodic balloon antenna. IEEE
+         Transactions on Antennas and Propagation, 63(6), 2756­2761.
+Huang, D., Yang, H., Wu, Y., Zhao, F., & Liu, X. (2018). A high-gain antipodal Vivaldi
+         antenna with multi-layer planar dielectric lens. Journal of Electromagnetic Waves
+         and Applications, 32(4), 403­412.
+IEEE Antennas & Propagation Society. (2014). IEEE standard for definitions of terms for
+         antennas. IEEE Std 145-2013 (Revision of IEEE Std 145-1993), 2013, 1­50.
+Jacobs, B., Odendaal, J. W., & Joubert, J. (2012). An improved design for a 1­18 GHz
+         double-ridged guide horn antenna. IEEE Transactions on Antennas and
+         Propagation, 60(9), 4110­4118.
+Kerarti, D. Z., Marouf, F. Z., & Meriah, S. M. (2012). New tapered slot vivaldi antenna for
+         UWB applications. In Proceedings of the International Conference on
+         Microelectronics, (pp. 5­8).
+Kumar, R., & Suraj, P. (2017). Antipodal Vivaldi antenna for UWB communication with
+         metamaterial. In Proceedings of the International Conference on Inventive Systems
+         and Control, (pp. 1­5).
+Kushwaha, N., & Kumar, R. (2014). Study of different shape electromagnetic band gap
+         (EBG) structures for single and dual band applications. Journal of Microwaves,
+         Optoelectronics and Electromagnetic Applications, 13(1), 16­30.
+
+                                                     26
+Li, Z., Tan, L., Kang, X., Su, J., Guo, Q., Yang, Y. L., & Wang, J. (2016). A novel
+         wideband end-fire conformal antenna array mounted on a dielectric cone. Applied
+         Computational Electromagnetics Society Journal, 31(8), 933­942.
+
+Natarajan, R., George, J. V., Kanagasabai, M., & Shrivastav, A. K. (2015). A compact
+         antipodal Vivaldi antenna for UWB applications. IEEE Antennas and Wireless
+         Propagation Letters, 14, 1557­1560.
+
+Pandey, G. K., Singh, H. S., Bharti, P. K., Pandey, A., & Meshram, M. K. (2014). High
+         gain Vivaldi antenna for radar and microwave imaging applications. International
+         Journal of Signal Processing Systems, 3(1), 35­39.
+
+Ren, L. S., Li, F., Zhao, J. J., Zhao, G., & Jiao, Y. C. (2010). A novel compact UWB
+         antenna with dual band-notched characteristics. Journal of Electromagnetic Waves
+         and Applications, 24(11­12), 1521­1529.
+
+Sarkar, D., & Srivastava, K. V. (2013). SRR-loaded antipodal Vivaldi antenna for UWB
+         applications with tunable notch function. In 21st International Symposium on
+         Electromagnetic Theory, (pp. 466­469).
+
+Singha, R., & Vakula, D. (2015). Corrugated antipodal Vivaldi antenna using spiral shape
+         negative index metamaterial for ultra-wideband application. In Proceedings of
+         IEEE International Conference on Signal Processing and Communication
+         Engineering Systems, (Vol. 5880, pp. 179­183).
+
+Tang, H. B., & Shui, X. Z. (2013). Design of antipodal Vivaldi antenna array. Applied
+         Mechanics and Materials, 380­384, 3465­3468.
+
+Teni, G., Zhang, N., Qiu, J., & Zhang, P. (2013). Research on a novel miniaturized
+         antipodal Vivaldi antenna with improved radiation. IEEE Antennas and Wireless
+         Propagation Letters, 12, 417­420.
+
+                                                     27
+Venkatarayalu, N. V., & Gan, Y. B. (2010). Design of a tapered slot array antenna for
+         UWB through-wall radar. In Proceedings of IEEE International Symposium on
+         Antennas and Propagation and CNC-USNC/URSI Radio Science Meeting -
+         Leading the Wave, (pp. 1­4).
+
+Vignesh, N., Sathish Kumar, G. A., & Brindha, R. (2014). Design and development of a
+         tapered slot Vivaldi antenna for ultra-wideband application. International Journal
+         of Advanced Research in Computer Science and Software Engineering, 4(5), 174­
+         178.
+
+Wang, P., Zhang, H., Wen, G., & Sun, Y. (2012). Design of a modified 6-18 GHz balanced
+         antipodal Vivaldi antenna. Progress in Electromagnetic Research, 25, 271­285.
+
+Yang, Z., Jingjian, H., Weiwei, W., & Naichang, Y. (2017). An antipodal Vivaldi antenna
+         with band-notched characteristics for ultra-wideband applications. AEU -
+         International Journal of Electronics and Communications, 76, 152­157.
+
+Yimdjo Poffelie, L. A., Soh, P. J., Yan, S., & A. E. Vandenbosch, G. (2016). A high-
+         fidelity all-textile UWB antenna with low back radiation for off-body WBAN
+         applications. IEEE Transactions on Antennas and Propagation, 64(2), 757­760.
+
+Zeng, J. (2013). Compact electromagnetic band-gap structures (EBG) and its applications
+         in antenna systems. In Master's Thesis, University of Waterloo (pp. 1­7).
+
+Zhang, J., Zhang, X., & Xiao, S. (2017). Antipodal Vivaldi antenna to detect UHF signals
+         that leaked out of the joint of a transformer. International Journal of Antennas and
+         Propagation, 2017, 1­13.
+
+Zhu, F., & Gao, S. (2013). Compact elliptically tapered slot antenna with nonuniform
+         corrugations for ultra-wideband applications. Radio Engineering, 22(1), 276­280.
+
+                                                     28
+                                             APPENDICES
+
+Appendix A: Journal Publications
+1. Adamu, S. A., Masri, T., Abidin, W.A.W .Z. & Ping, K. H. (2017) Review on gain and
+
+    directivity enhancement techniques of Vivaldi antennas. International Journal of
+    Scientific & Engineering Research, 8(3), 1919­1927.
+2. Adamu, S. A., Masri, T., Abidin, W. A. W. Z., Ping, K. H. & Babale, S. A. (2017).
+    Corrugated antipodal Vivaldi antenna for radar applications. The Institute of
+    Electronics, Information and Communication Engineers, 117(321), 111­116.
+3. Adamu, S. A., Masri, T., Zainal Abidin, W. A. W., Ping, K. H. & Babale, S. A. (2018).
+    High-gain modified antipodal Vivaldi antenna for ultra-wideband applications. Journal
+    of Telecommunication, Electronic and Computer Engineering, 10(1­12), 55­59.
+4. Adamu, S. A., Masri, T., Abidin, W. A. W. Z., Ping, K. H. & Su, H. T. (2018).
+    Corrugated band-notched antipodal Vivaldi antenna using mushroom type EBG
+    structure for wideband applications. Journal of Advanced Research in Engineering
+    Knowledge, 5(1), 66­75.
+
+                                                     29
+Appendix B: NMEA Data
+                                  Figure 1: Sample of NMEA Data
+
+                                                     30
+

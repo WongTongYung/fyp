@@ -1,0 +1,85 @@
+provide a real-time, low-cost alternative for recreational pickleball players using only a generic
+laptop.
+
+2.5 Object Detection Algorithms
+         Object detection is a fundamental computer vision task that involves identifying and
+
+locating instances of semantic objects of a certain class in digital images or videos (Jiao et al.,
+2019). While image classification focuses on categorizing the images into a label, object detection
+extends this capability by simultaneously identifying the position and labelling the object (Liu et
+al., 2019). It transforms from identifying instance of the object to precisely determining the
+coordinate and classes of the object simultaneously.
+
+         The core complexity of object detection lies in the execution of two different tasks in
+classification and localization. Classification is responsible for determining the identity of the
+object and labeling it as a class. On the other hand, localization requires the model to precisely
+estimate the geometric coordinates of a bounding box of an object. Both requirements combined
+required significant computational power to process compared to the standard image classification.
+The model cannot simply assign a label to the whole image instead needs to scan the entire frame
+to identify the geometric coordinates.
+
+         In the domain of deep learning, object detection algorithms are generally categorized into
+two primary architectures which are two-stage detectors and one-stage detectors (Zhao et al., 2019).
+One-stage detectors prioritize inference speed by performing both tasks simultaneously. Two-stage
+detectors prioritize in accuracy by separating the localization and classification steps. To determine
+the most suitable architecture for real-time pickleball tracking, few algorithms are reviewed and
+suggested as a most potential algorithm such as Faster R-CNN, SSD, and YOLO.
+
+                                                         18
+2.5.1 Two-Stage Detectors (Faster R-CNN)
+         The Region-based Convolutional Neural Network (R-CNN) family constitutes a
+
+foundational approach in deep learning-based object detection. Its most prominent iteration, Faster
+R-CNN, functions through a distinct two-phase process , as illustrated in Figure 2.8. In the first
+phase, Region Proposal Network (RPN) scans the image to generate the object bounding boxes. In
+the second phase, classifies the object and refines the bounding box coordinates to ensure precision
+(Jiao et al., 2019).
+
+             Figure 2.8 High-level architecture of Faster R-CNN (GHOURY et al., 2019)
+         Despite Faster R-CNN being able to offer a high accuracy performance, this two-stage
+architecture presents a limitation for the pickleball tracking project. Computational is very
+expensive when processing a large amount of data. Typically yielding speeds of only 5­7 Frames
+Per Second (FPS) on standard consumer laptops (Ren et al., 2017). This latency is unacceptable
+for the project need to track a real-time application such as high velocity pickleball, which can
+travel at speeds exceeding 60 km/h (Fischetti, 2024). In a low frame rate would result in significant
+motion gaps between detections.
+
+                                                         19
+2.5.2 One-Stage Detectors (SSD)
+         The Single Shot MultiBox Detector (SSD) was developed to address the issue of latency
+
+bottlenecks found in two-stage architectures like Faster R-CNN. It eliminates the use of the region
+proposal stage entirely and treats object detection as a single deep neural network regression
+problem (Jiao et al., 2019). Moreover, SSD can predict bounding boxes and class probabilities
+directly from feature maps in a single forward pass of the network, significantly reducing
+computational overhead (Zhao et al., 2019).
+
+   Figure 2.9 SSD architecture showing detection at multiple feature map scales (Li et al, 2021)
+         However, the trade-off in high accuracy is critical for this project. SSD struggles with small
+
+object detection because it relies on lower-resolution feature maps to predict objects by referring
+to the figure 2.9 (Liu et al., 2019). In the scenario of pickleball tracking, the ball appears as a very
+small object and prone to missed detections. Making it less reliable than the proposed YOLO
+solution.
+
+                                                         20
+2.5.3 You Only Look Once (Yolov11)
+         The You Only Look Once (YOLO) framework is a unified architecture designed to optimize
+
+object detection for real-time applications. Proposed by Redmon et al. (2016), YOLO redefines the
+traditional detection pipeline by framing the entire task as a single regression problem. The
+architecture operates by dividing the input image into a grid, as illustrated in Figure 2.10. Within
+this structure, each grid cell is responsible for simultaneously predicting bounding box coordinates,
+confidence scores, and class probabilities. This unified design allows the neural network to process
+the full image in a single forward pass, enabling high-speed inference without the need for complex,
+sequential processing steps (Redmon et al., 2016).
+
+                  Figure 2.10 The YOLO network architecture (Redmon et al., 2016)
+         For this project, the YOLOv11-m (Medium) model was selected as the optimal architecture.
+Released by Ultralytics in late 2024, it introduces significant improvements suited for the dynamic
+environment of pickleball. The model utilizes enhanced feature extraction layers that allow it to
+capture invariant features, ensuring the ball is recognized even when its texture is degraded by
+motion blur or changing lighting conditions (Jocher et al., 2024).
+
+                                                         21
+

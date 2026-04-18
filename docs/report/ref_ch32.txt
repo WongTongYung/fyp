@@ -1,0 +1,77 @@
+         The high-level architecture of the proposed system is illustrated in Figure 3.1. This shows
+the beginning of the video input from the live camera feed, processed by the computer vision
+module to extract frame data. The detected coordinates are then passed to the game logic engine to
+determine the match state. Finally, the results are stored in the database and visualized on the
+dashboard interface for the user.
+
+3.2 METHODOLOGY
+         The development of the Automated Pickleball Point Counting System adopts the Waterfall
+
+model. This approach organizes the project lifecycle into four different stages, which is the data
+collection and preparation, core detection module, game logic and database development and
+system integration and testing. This sequential approach ensures prioritization of the core Artificial
+Intelligence (AI) component before the development of the application logic. This ensures that the
+object detection model meets the necessary accuracy requirements before it is integrated into the
+final software solution. Figure 3.2 shows the waterfall model for this project.
+
+                                                         25
+Figure 3.2 Development Framework of the Automated Pickleball Point Counting System
+                                                    26
+3.2.1 Phase 1: Data Collection and Preparation
+         The first phase focuses on a custom dataset. Data collection involves recording actual
+
+gameplay using a standard USB webcam set to a 1080p resolution. As illustrated in Figure 3.3, the
+camera is positioned at a fixed point at the rear center of the court, elevated approximately 1.5
+meters high. This specific placement ensures a complete Field of View (FOV) of the court lines
+and player movements while minimizing occlusion.
+
+         This specific configuration was selected based on several key factors. The longitudinal
+angle offers an optimal Field of View (FOV) that captures both the serving and receiving sides
+within a single frame. Furthermore, positioning the camera at an elevated height minimizes the risk
+of obstruction by the players compared to net-level or side-line configurations. Finally, the fixed
+position of the camera creates a uniform tracking environment, ensuring the detection algorithm
+can consistently monitor the ball across the entire court.
+
+                          Figure 3.3 The position of camera at the rear baseline
+                                                         27
+         Once the raw video footage is captured, it is processed into individual frames using the
+OpenCV library. These frames were manually annotated using tools of Roboflow, where bounding
+boxes were drawn around the pickleball in each frame to clearly define the object of interest.
+Preliminary validation of this annotation workflow was conducted using proxy objects, as shown
+in Figure 3.4, before proceeding to full-scale on-court data collection.
+
+     Figure 3.4 Illustration of the bounding box annotation workflow using a proxy object for
+                                               preliminary testing
+
+         Finally, the annotated dataset was partitioned into three distinct subsets: Training Set of 70%
+for learning features, Validation Set of 20% for hyperparameter tuning during training, and Testing
+Set of 10% for the final unbiased evaluation.
+
+                                                         28
+3.2.2 Phase 2: Core Detection Module (Yolov11 Training)
+         In this phase, the training process focuses on maximizing the Mean Average Precision
+
+(mAP). The model is fine-tuned on the custom dataset prepared in Phase 1 using the PyTorch deep
+learning framework. mAP is a performance metric that calculates the average precision across
+various recall levels, providing a single score that balances false positives and false negatives. This
+metric is crucial for validating the model's consistency in detecting the small, high-velocity
+pickleball across different frames. Specifically, the system aims to optimize mAP@50, and
+hyperparameters will be iteratively adjusted to maximize this score, ensuring high-confidence
+tracking in real-time.
+
+3.2.3 Phase 3: Game Logic And Database Development
+         A python language is used to construct a base game logic engine as a state machine. This
+
+engine is responsible for enforcing the specific rules of pickleball, particularly the traditional side-
+out scoring format, which requires tracking the serving teams score, the receiving teams score, and
+the server number. Concurrently, a local storage solution is implemented using the SQLite database
+engine. This database is designed to log game events accompanied by a precise timestamp. This
+ensures the system works entirely offline and preserves match data for post-game analysis.
+
+3.2.4 Phase 4: System Integration And Testing
+         The final phase involves integrating the independent components into a unified functional
+
+prototype. The coordinates generated by the YOLOv11 module in phase 2 are fed directly into the
+
+                                                         29
+

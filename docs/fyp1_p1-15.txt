@@ -1,0 +1,290 @@
+PICKLEBALL AUTOMATED POINT COUNTING USING AI
+
+                                   Wong Tong Yung
+                                          87100
+
+                  Bachelor of Computer Science with Honours
+                                (Network Computing)
+                                           2025
+                                          ABSTRACT
+
+         Pickleball is currently growing at an exponential rate globally. However, a major barrier has
+emerged due to its unique officiating requirements of pickleball. Pickleball utilizes a complex side-out
+scoring format where points are only awarded to the serving team, and the score is announced as a unique
+three-number. Recreational players are subjected to a significant cognitive burden due to this non-linear
+scoring structure, which frequently results in memory errors, on-court disputes, and a disturbed gameplay
+flow. While professional tournaments benefit from high-fidelity optical tracking systems like Hawk-Eye,
+these solutions rely on expensive multi-camera infrastructures that are financially and logistically
+inaccessible to the average recreational community. Similar to this, current consumer solutions either have
+ecosystem exclusivity issues or necessitate the purchase of expensive, specialized hardware, creating a need
+for an affordable substitute. This project involves the creation of an affordable Automated Pickleball Point
+Counting System that can run fully on a typical consumer laptop. The proposed solution integrates computer
+vision and artificial intelligence to track match events in real-time using a standard USB webcam. The
+methodology begins with the custom dataset comprising footage of local gameplay, which is annotated to
+fine-tune the YOLOv11-m object detection model. The detected object coordinates are subsequently
+processed by a custom Python-based Game Logic Engine. This engine operates as a finite state machine,
+enforcing the server rotation and rally termination conditions. Data persistence is managed using local
+SQLite database, which guarantees offline functionality and facilitates detailed post-match analytics. The
+final system is accessible through a lightweight web-based dashboard that visualizes the live three-number
+score and includes a video rewind feature for immediate dispute verification. By validating this prototype
+against manual scoring methods, the project demonstrates that high-level sports analytics can be
+democratized. Providing recreational players with a reliable, automated tool that enhances the enjoyment
+of the sport.
+
+                                                          ii
+                                           ABSTRAK
+
+         Pickleball kini sedang berkembang pada kadar eksponen di peringkat global. Walau bagaimanapun,
+satu halangan utama telah muncul disebabkan oleh keperluan pengadilan yang unik bagi sukan tersebut.
+Pickleball menggunakan format pemarkahan side-out yang kompleks di mana mata hanya diberikan kepada
+pasukan yang melakukan servis, dan skor diumumkan sebagai siri tiga nombor yang unik. Pemain rekreasi
+sering tertakluk kepada beban kognitif yang ketara disebabkan oleh struktur pemarkahan bukan linear
+mengakibatkan kesilapan ingatan, pertikaian di gelanggang, dan gangguan kepada kelancaran permainan.
+Walaupun kejohanan profesional mendapat manfaat daripada sistem penjejakan optik berketepatan tinggi
+seperti Hawk-Eye, penyelesaian ini bergantung kepada infrastruktur kamera yang mahal, menjadikannya
+sukar diakses secara kewangan dan logistik oleh komuniti rekreasi biasa. Begitu juga, penyelesaian
+pengguna semasa sama ada mempunyai isu eksklusiviti ekosistem atau memerlukan pembelian perkakasan
+khusus yang mahal, sekaligus mewujudkan keperluan untuk alternatif yang mampu milik. Projek ini
+melibatkan pembangunan sistem pemarkahan pickleball automatik yang kos efektif dan boleh dijalankan
+sepenuhnya pada komputer riba pengguna biasa. Penyelesaian yang dicadangkan mengintegrasikan visi
+komputer dan kecerdasan buatan untuk menjejak peristiwa perlawanan dalam masa nyata menggunakan
+kamera web USB standard. Sistem akhir boleh diakses melalui papan pemuka berasaskan web yang ringan,
+yang memvisualisasikan secara langsung dan menyertakan ciri putar semula video untuk pengesahan segera
+sekiranya berlaku pertikaian. Dengan mengesahkan ketepatan prototaip ini berbanding kaedah pemarkahan
+manual, projek ini membuktikan bahawa analitik sukan peringkat tinggi boleh didemokrasikan, sekaligus
+menyediakan pemain rekreasi dengan alat automatik yang boleh dipercayai yang meningkatkan
+keseronokan sukan tersebut.
+
+                                                          iii
+                                  TABLE OF CONTENTS
+
+ABSTRACT .................................................................................................................................... ii
+ABSTRAK ..................................................................................................................................... iii
+TABLE OF CONTENTS ................................................................................................................iv
+LIST OF FIGURES....................................................................................................................... vii
+LIST OF TABLES ..........................................................................................................................ix
+CHAPTER 1 INTRODUCTION .....................................................................................................1
+
+  1.1 Introduction ............................................................................................................................1
+  1.2 Problem Statement..................................................................................................................2
+  1.3 Scope ......................................................................................................................................3
+  1.4 Objective.................................................................................................................................4
+  1.5 Brief Methodology .................................................................................................................4
+  1.6 Significance of Project............................................................................................................6
+  1.7 Project Schedule .....................................................................................................................7
+  1.8 Expected Outcome..................................................................................................................7
+CHAPTER 2 : LITERATURE REVIEW ........................................................................................8
+  2.1 Introduction ............................................................................................................................8
+  2.2 Pickleball Scoring...................................................................................................................8
+  2.3 Review of Existing Commercial Systems ............................................................................10
+
+                                                          iv
+     2.3.1 Hawk-Eye ......................................................................................................................11
+     2.3.2 Swingvision....................................................................................................................13
+     2.3.3 In/Out .............................................................................................................................15
+  2.4 Comparison of Existing Commercial Solutions ...................................................................16
+  2.5 Object Detection Algorithms................................................................................................18
+     2.5.1 Two-Stage Detectors (Faster R-CNN)...........................................................................19
+     2.5.2 One-Stage Detectors (SSD) ...........................................................................................20
+     2.5.3 You Only Look Once (Yolov11) ...................................................................................21
+     2.5.4 Comparison of Algorithms ............................................................................................22
+     2.6 Comparative Summary .....................................................................................................23
+CHAPTER 3 : REQUIREMENT ANALYSIS AND DESIGN.....................................................24
+  3.1 Introduction ..........................................................................................................................24
+  3.2 Methodology.........................................................................................................................25
+     3.2.1 Phase 1: Data Collection and Preparation......................................................................27
+     3.2.2 Phase 2: Core Detection Module (Yolov11 Training) ...................................................29
+     3.2.3 Phase 3: Game Logic And Database Development .......................................................29
+     3.2.4 Phase 4: System Integration And Testing ......................................................................29
+  3.3 Requirements Analysis .........................................................................................................30
+     3.3.1 Functional Requirements ...............................................................................................32
+
+                                                          v
+     3.3.2 Non-Functional Requirements .......................................................................................34
+     3.3.3 Hardware and Software Requirements ..........................................................................35
+  3.4 System Design ......................................................................................................................37
+     3.4.1 Use Case Diagram..........................................................................................................38
+     3.4.2 Use Case Description.....................................................................................................39
+     3.4.3 Sequence Diagram .........................................................................................................45
+     3.4.4 Activity Diagram ...........................................................................................................46
+     3.4.5 Class Diagram ................................................................................................................48
+     3.4.6 Entity Relationship Diagram (ERD) ..............................................................................49
+     3.4.7 Graphical User Interface (GUI) Design .........................................................................50
+  3.5 Summary...............................................................................................................................51
+REFERENCES ............................................................................................................................... 52
+
+                                                          vi
+                                     LIST OF FIGURES
+
+Figure 1.1 Waterfall model diagram.................................................................................................5
+Figure 1.2 Overview of Gantt Chart.................................................................................................7
+Figure 2.1 Illustration of the three-number scoring format..............................................................9
+Figure 2.2 The Side-Out Scoring Process ......................................................................................10
+Figure 2.3 Operational diagram of the Hawk-Eye tracking system (Hawk-Eye Innovations, n.d.)
+........................................................................................................................................................ 11
+Figure 2.4 A Hawk-Eye camera mounted on a stadium gantry (Daily Mail, 2013).......................12
+Figure 2.5 Swing stick phone mount setup. (SwingVision, 2025).................................................13
+Figure 2.6 Price of the subscription fee..........................................................................................14
+Figure 2.7 Setup of the In/Out Net Device V4.0 (In/Out Tennis, n.d.) ..........................................15
+Figure 2.8 High-level architecture of Faster R-CNN (GHOURY et al., 2019)..............................19
+Figure 2.9 SSD architecture showing detection at multiple feature map scales (Li et al, 2021) ...20
+Figure 2.10 The YOLO network architecture (Redmon et al., 2016) ............................................21
+Figure 3.1 Proposed System Architecture ......................................................................................24
+Figure 3.2 Development Framework of the Automated Pickleball Point Counting System..........26
+Figure 3.3 The position of camera at the rear baseline ..................................................................27
+Figure 3.4 Illustration of the bounding box annotation workflow using a proxy object for
+preliminary testing..........................................................................................................................28
+Figure 3.5 System Modeling Language Diagram ..........................................................................31
+Figure 3.6 Automated Pickleball Point Counting System use case diagram .................................38
+Figure 3.7 Sequence diagram of Automated Pickleball Point Counting System ...........................45
+Figure 3.8 Activity Diagram of Pickleball Scoring Rules..............................................................47
+
+                                                         vii
+Figure 3.9 Class Diagram of the Automated Pickleball Point Counting System ...........................48
+Figure 3.10 Entity Relationship Diagram of the System Database................................................49
+Figure 3.11 Graphical User Interface of scoreboard ......................................................................50
+
+                                                         viii
+                                      LIST OF TABLES
+
+Table 2.1 Comparison of existing commercial solutions ...............................................................17
+Table 2.2 Comparison of Object Detection Algorithms .................................................................22
+Table 3.1 Table 3.1 List of Functional Requirements ....................................................................32
+Table 3.2 List of Non-Functional Requirements ............................................................................34
+Table 3.3 Hardware Requirements .................................................................................................35
+Table 3.4 Software Requirements ..................................................................................................36
+Table 3.5 Use Case Description for automated game tracking ......................................................39
+Table 3.6 Use Case Description for Process Object Detection ......................................................40
+Table 3.7 Use Case Description for Update Game State................................................................41
+Table 3.8 Use Case Description for Save Match Log ....................................................................42
+Table 3.9 Use Case Description for View Live Dashboard............................................................43
+Table 3.10 Use Case Description for Rewind Video......................................................................44
+
+                                                          ix
+                             CHAPTER 1 INTRODUCTION
+
+1.1 Introduction
+         Pickleball is a rapidly growing paddle sport that attracts a lot of newcomers due to its easy
+
+learning curve. The origin of the pickleball was invented in 1965 in Washington, USA (Brinkerhoff,
+2023). The game is a combination of few elements such as tennis, badminton, and ping pong. The
+court is played on a badminton-sized court with a slightly lower net similar to tennis while using
+an oversized paddle to hit a polymer ball. The game usually plays in doubles since it is the most
+common format in both recreational and competitive play.
+
+         Pickleball game consists of few serving rules to decide the scoring. The serves must starts
+with underhand with the paddle below the waist. Ball must travel diagonally passing the non-volley
+zone and bounce once by both sides. This rule is named as two-bounce rule. If a player volleys
+within the kitchen, hits the ball into the net, or out of bounds. It is considered as fault that leads to
+the end of the rally.
+
+         The common scoring system in pickleball is known as traditional side-out scoring. This is
+the primary scoring system adopted by the official tournament and used as a default in recreational
+play. The scoring mechanics awards points to the serving side if wins a rally. But if the receiving
+team wins, they will win a serve instead of the points (Mackie, 2024). A lot of confusion came from
+the doubles scoring which requires tracking three numbers. Which is the serving teams score, the
+receiving teams score, and the server number. Before serving, the server must announce these three-
+number scores. This increases the difficulty for players to remember the numbers, especially when
+there are long, intense rallies or distractions on or off the court.
+
+                                                          1
+         The reliance on manual scorekeeping often leads to disrupting gameplay, increasing the
+likelihood of prone human error. This often led to frequent disputes that disrupt the flow and
+enjoyment of the game. Highlighting a clear need for a technological solution to automate the
+process.
+
+1.2 Problem Statement
+         Pickleball is the fastest-growing sport in Malaysia, primarily due to the low barrier of entry
+
+and highly social sport. This has led to significant growth in new recreational and amateur players
+in recent years (Elara, 2023).
+
+         However, the supporting technology for the game has not kept pace with the current rapid
+growth of players. For the vast majority of recreational and amateur matches, scorekeeping remains
+a manual process. This system is highly prone to human error, indicating players are overload with
+the information since players need to track the three-number score, server rotation, and game state
+simultaneously while actively playing the pickleball.
+
+         The unreliability of this manual process frequently leads to disputes over the score. These
+conflicts not only disrupt the flow of play but also diminish the overall enjoyment of the players.
+While professional-grade automated systems like Hawk-Eye exist in the market, these systems are
+not available for vast majority of the pickleball community. They are purposely designed for
+professional broadcast tournaments, not for recreational and community courts.
+
+         Therefore, this project addresses the issue of lack of accessible technology between the
+recreational and amateur pickleball community. The aim is to develop a low-cost, reliable, and
+
+                                                          2
+user-friendly automated point counting system for average players enhancing the players overall
+enjoyment and experience.
+
+1.3 Scope
+         The scope of this project is to develop an Automated Pickleball Point Counting System for
+
+recreational pickleball running on a local PC. The object detection module using YOLOv11-m
+model and fine-tuning using the PyTorch framework. This model will be implemented in Python,
+using the OpenCV library to process the video feed. This project will be using SQLite database to
+store the game events with a timestamp. The simple graphical user interface to display in dashboard
+will be built with standard HTML, CSS, and JavaScript, running in a browser.
+
+         Due to the difficulty of tracking the player pose movement, this project will be limited to
+tracking the ball only. The foot faults or kitchen violations will not be included in the system.
+Currently, a single camera will be used to setup in the between on the court to detect the movement
+of the ball.
+
+                                                          3
+1.4 Objective
+    · To design an Automated Pickleball Point Counting System by identifying real-time object
+         detection models and defining the complete system architecture.
+    · To develop a functional prototype of the system by training and fine-tuning a YOLOv11-
+         m model on a custom dataset and integrating with a Python-based game logic engine.
+    · To evaluate the accuracy and reliability of the Automated Pickleball Point Counting System
+         prototype by comparing the results against manual scorekeeping.
+
+1.5 Brief Methodology
+         This project adopts the Waterfall model as the primary Software Development Life Cycle
+
+(SDLC). This model follows the sequential approach for the development of stages, ensuring that
+requirements data are developed and recorded before proceeding to implementation and testing.
+The project execution is organized into the following four phases which are data collection and
+preparation, computer vision model implementation, game engine and database construction and
+system integration and testing. Figure 1.1 below show the Waterfall diagram in the sequential
+approach.
+
+                                                          4
+                                     Figure 1.1 Waterfall model diagram
+
+         The development process begins with data collection and preparation. A custom dataset will
+be created by recording local pickleball games. Raw video footage will be processed into individual
+frames, which will be annotated with bounding boxes to create training data.
+
+         This next phase followed by the computer vision model implementation. YOLO object
+detection model will be fine-tuned on the custom dataset using the PyTorch framework. The
+training process in this stage will focus on maximizing mean Average Precision to ensure the model
+reliably outputs accurate real-time ball coordinates.
+
+         The third phase involves game engine and database construction. A Python-based game
+logic engine will be designed to manage side-out scoring rules, track server rotation, and maintain
+the overall game state. Additionally, an SQLite database will be implemented to log all game events
+with timestamps.
+
+                                                          5
+         Finally, the process concludes with system integration and testing. The coordinates are fed
+to the logic engine to update the score and log events, allowing for real-time dashboard display and
+post-match analytics. This phase will be performed in real-time testing. System will be validated
+in a live match environment to compare the scoring accuracy against manual scorekeeping.
+
+1.6 Significance of Project
+         The primary significance of this project is to enhance the player experience. By automating
+
+the process of manual scoring, the system effectively reduces human error, which minimizes on-
+court disputes and game interruptions. This allows players to remain fully focused on the game,
+thereby improving the overall experience and enjoyment of the sport.
+
+         Furthermore, the project plays a crucial role in democratizing sports technology. It
+addresses a significant accessibility gap by demonstrating that a low-cost, software-based solution
+provides a viable alternative to expensive professional systems. This approach makes advanced
+sports analytics accessible to the wider recreational community.
+
+                                                          6
+

@@ -3,7 +3,7 @@ import os
 _ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # --- Model Paths ---
-BALL_MODEL_PATH = "models/best26m-improved3.pt"
+BALL_MODEL_PATH = "models/best26m-improved4.pt"
 TRAINING_DATA_PATH = "training/pickleball.v1i.yolo26_combined/data.yaml"
 
 # --- Data Paths ---
