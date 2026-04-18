@@ -34,7 +34,8 @@ https://github.com/user-attachments/assets/b89b8c28-d4fb-47b9-9527-6d0dff7da809
 
 ## System Architecture
 
-![System Architecture](docs/architecture.png)
+<img width="843" height="334" alt="system Architecture Fyp" src="https://github.com/user-attachments/assets/c6dd32eb-3037-4fb6-8d35-623e82473af2" />
+
 
 | Component | Role |
 |---|---|
