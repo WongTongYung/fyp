@@ -19,7 +19,7 @@ from core.calibration import get_court, compute_homography
 from config import BALL_MODEL_PATH
 from core.win_perf import win32_perf_setup, keep_igpu_alive
 from core.ipc import (SHM_SIZE, SHM_NAME,
-                      MSG_STATUS, MSG_SOURCE, MSG_LOG,
+                      MSG_STATUS, MSG_SOURCE, MSG_LOG, MSG_RESET,
                       CMD_START, CMD_STOP, CMD_PAUSE, CMD_RESUME, CMD_REWIND,
                       CMD_RECALIBRATE)
 
@@ -41,7 +41,11 @@ def _send(state_queue, msg):
     try:
         state_queue.put_nowait(msg)
     except queue.Full:
-        pass
+        try:
+            state_queue.get_nowait()
+            state_queue.put_nowait(msg)
+        except (queue.Empty, queue.Full):
+            pass
 
 
 def run_display_process(cmd_queue, state_queue, shm_name, shm_lock):
@@ -96,8 +100,9 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     """Full pipeline: capture → raw MJPEG + YOLO detections via IPC."""
     init_db()
     match_id = start_match()
-    logging.info("[Process-1 Tracking] Match started (ID: %d)", match_id)
-    _send(state_queue, {"type": MSG_LOG, "message": f"Match started (ID: {match_id})"})
+    source_label = "webcam" if source == 0 else str(source)
+    logging.info("[Process-1 Tracking] Match started (ID: %d, source: %s)", match_id, source_label)
+    _send(state_queue, {"type": MSG_LOG, "message": f"Match started (ID: {match_id}, source: {source_label})"})
 
     # Queues for threads
     save_queue = queue.Queue(maxsize=128)
@@ -168,7 +173,9 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
             cap = cv2.VideoCapture(source)
         if not cap or not cap.isOpened():
             logging.error("[Process-1 Tracking] Error: Could not open video source.")
-            _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video source."})
+            _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video source. Check Settings and try again."})
+            end_match(match_id)
+            _send(state_queue, {"type": MSG_STATUS, "status": "idle"})
             return
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -190,6 +197,8 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         _send(state_queue, {"type": MSG_LOG, "message": "Error: Could not open video writer."})
         if cap:
             cap.release()
+        end_match(match_id)
+        _send(state_queue, {"type": MSG_STATUS, "status": "idle"})
         return
 
     # Grab first frame for calibration
@@ -247,6 +256,8 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         court_container, state_queue,
     ), daemon=True)
 
+    if setup_config:
+        _send(state_queue, {"type": MSG_RESET, "config": setup_config})
     _send(state_queue, {"type": MSG_STATUS, "status": "live"})
     for t in (t1, t2, t3, t4, t_cmd):
         t.start()
@@ -275,7 +286,8 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
     cv2.destroyAllWindows()
 
 
-def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model):
+def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model,
+                      default_source=None, default_config=None):
     """Main loop in the tracking process. Waits for commands, runs pipelines."""
     while True:
         try:
@@ -287,7 +299,12 @@ def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model):
 
         if cmd.get("type") == CMD_START:
             source = cmd.get("source", 0)
+            if source == 0 and default_source is not None:
+                source = default_source
             config = cmd.get("config", {})
+            if default_config:
+                for k, v in default_config.items():
+                    config.setdefault(k, v)
             run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config)
 
 
@@ -329,6 +346,7 @@ if __name__ == "__main__":
 
     # Argument safety check
     src = None
+    cli_config = {}
     if len(sys.argv) > 1:
         src = sys.argv[1]
         if src.isdigit():
@@ -336,6 +354,13 @@ if __name__ == "__main__":
         elif not os.path.isfile(src):
             logging.error("Error: '%s' is not a valid camera index or file path.", src)
             sys.exit(1)
+        for arg in sys.argv[2:]:
+            if arg.startswith("--mode="):
+                cli_config["mode"] = arg.split("=", 1)[1].strip().lower()
+            elif arg.startswith("--team-near="):
+                cli_config["team_near"] = arg.split("=", 1)[1].strip()
+            elif arg.startswith("--team-far="):
+                cli_config["team_far"] = arg.split("=", 1)[1].strip()
 
     # --- Start Display Process (Process 2) ---
     # Display process webserver is started before tracking loop
@@ -359,12 +384,12 @@ if __name__ == "__main__":
     # --- Tracking Process (Process 1 = this process) ---
     logging.info("[Process-1 Tracking] Started (PID: %d)", os.getpid())
     if src is not None:
-        run_pipeline(src, state_queue, shm, shm_lock, cmd_queue, model)
-    else:
-        logging.info("[Process-1 Tracking] Dashboard ready at http://127.0.0.1:5000 -- use the Start button.")
-        try:
-            run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model)
-        except KeyboardInterrupt:
-            logging.info("[Process-1 Tracking] Shutting down...")
-            _send(state_queue, {"type": MSG_STATUS, "status": "shutdown"})
-            time.sleep(1)
+        logging.info("[Process-1 Tracking] Source preloaded: %s. Open dashboard, configure mode, then click Start.", src)
+    logging.info("[Process-1 Tracking] Dashboard ready at http://127.0.0.1:5000 -- use the Start button.")
+    try:
+        run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model,
+                          default_source=src, default_config=cli_config)
+    except KeyboardInterrupt:
+        logging.info("[Process-1 Tracking] Shutting down...")
+        _send(state_queue, {"type": MSG_STATUS, "status": "shutdown"})
+        time.sleep(1)

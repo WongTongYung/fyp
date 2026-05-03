@@ -25,6 +25,8 @@ class GameState:
         self.server_number = cfg.get("server", 1)
         self.server_side = cfg.get("server_side", "near")
         self.mode = cfg.get("mode", "doubles")
+        self.team_near = cfg.get("team_near", "Team A")
+        self.team_far = cfg.get("team_far", "Team B")
 
         # Rally tracking
         self.rally_bounces = []        # list of {"side", "in_court", "cx", "cy"}
@@ -52,7 +54,11 @@ class GameState:
         try:
             self.state_queue.put_nowait(msg)
         except queue.Full:
-            pass
+            try:
+                self.state_queue.get_nowait()
+                self.state_queue.put_nowait(msg)
+            except (queue.Empty, queue.Full):
+                pass
 
     def _get_court(self):
         """Return (court_poly, net_line, H) or (None, None, None)."""
@@ -77,6 +83,10 @@ class GameState:
         speed = (dx ** 2 + dy ** 2) ** 0.5
         return speed, dx, dy
 
+    def _team_name(self, side):
+        """Return the team name on the given side."""
+        return self.team_near if side == "near" else self.team_far
+
     def _push(self, event_type, cx=None, cy=None, conf=None, notes=None):
         """Log to DB and send to display process."""
         log_event(self.match_id, event_type, cx=cx, cy=cy,
@@ -87,8 +97,13 @@ class GameState:
         self.server_score += 1
         log_score(self.match_id, self.server_score,
                   self.receiver_score, self.server_number)
+        if self.mode == "singles":
+            score_str = f"{self.server_score}-{self.receiver_score}"
+        else:
+            score_str = f"{self.server_score}-{self.receiver_score}-{self.server_number}"
         self._push("point_server",
-                   notes=f"Score {self.server_score}-{self.receiver_score}-{self.server_number}")
+                   notes=f"Point to {self._team_name(self.server_side)}. "
+                         f"Score {score_str}")
         self._send({
             "type": MSG_SCORE_UPDATE,
             "serving": self.server_score,
@@ -108,8 +123,12 @@ class GameState:
             self.server_number = 2
         log_score(self.match_id, self.server_score,
                   self.receiver_score, self.server_number)
+        if self.mode == "singles":
+            server_label = self._team_name(self.server_side)
+        else:
+            server_label = f"{self._team_name(self.server_side)} (Server #{self.server_number})"
         self._push("side_out",
-                   notes=f"Server #{self.server_number} now serving. "
+                   notes=f"Side-out. {server_label} now serving. "
                          f"{self.server_score}-{self.receiver_score}")
         self._send({
             "type": MSG_SCORE_UPDATE,
@@ -178,7 +197,7 @@ class GameState:
                     if ball_side == self.server_side:
                         self.serve_state = "SERVE_DETECTED"
                         self._push("serve_detected", cx=cx, cy=cy, conf=conf,
-                                   notes=f"Serve detected from {self.server_side} side")
+                                   notes=f"Serve detected from {self._team_name(self.server_side)}")
                         if H is not None:
                             cx_cm, cy_cm = pixel_to_court(cx, cy, H)
                             self._send({

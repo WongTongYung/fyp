@@ -4,6 +4,9 @@
 *.onnx
 *.weights
 
+# Allow the final trained model only
+!models/best26m-improved4.pt
+
 # Video files
 *.mp4
 *.avi
@@ -25,7 +28,15 @@ training/frames_TrainSet/
 
 # Dataset directories (large)
 training/dataset/
+training/pickleball.*/
 Pickleball*/
+
+# Large runtime and training assets (local only)
+assets/rewind/
+assets/trainingData/
+
+# Court calibration (user-specific, must recalibrate per setup)
+data/court.json
 
 # Python
 __pycache__/
@@ -39,3 +50,6 @@ venv/
 # OS
 Thumbs.db
 .DS_Store
+
+# Report documents
+docs/

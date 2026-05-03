@@ -290,7 +290,9 @@ function updateLiveStats(data) {
 
     // Count side outs from log entries
     var sideOuts = 0;
-    data.log.forEach(function (msg) {
+    (data.log || []).forEach(function (entry) {
+        var msg = (typeof entry === 'object' && entry !== null && 'msg' in entry) ? entry.msg : entry;
+        if (typeof msg !== 'string') return;
         if (msg.toLowerCase().indexOf('side') !== -1 && msg.toLowerCase().indexOf('out') !== -1) sideOuts++;
     });
     document.getElementById('statSideOuts').textContent = sideOuts;
@@ -316,6 +318,13 @@ function pollScore() {
             receivingScore = data.receiving;
             serverNumber   = data.server;
             serverSide     = data.server_side || serverSide;
+            if (data.mode && data.mode !== gameMode && data.status === 'live') {
+                gameMode = data.mode;
+                document.querySelectorAll('[data-mode]').forEach(function (b) {
+                    b.classList.toggle('active', b.dataset.mode === gameMode);
+                });
+                updateModeUI();
+            }
             updateScoreboard();
 
             // Sync status
@@ -324,6 +333,10 @@ function pollScore() {
                 isRunning = true;
                 statusEl.textContent = '(Status: Live)';
                 statusEl.classList.add('live');
+            } else if (data.status === 'idle') {
+                isRunning = false;
+                statusEl.textContent = '(Status: Idle - Configure in Settings and click Start)';
+                statusEl.classList.remove('live');
             } else if (data.status === 'paused') {
                 isRunning = false;
                 statusEl.textContent = '(Status: Paused)';
@@ -336,14 +349,19 @@ function pollScore() {
                 window.close();
             }
 
-            // Append new server-side log entries
-            // If server trimmed the log (length shrank), reset our pointer
-            if (data.log.length < _serverLogCount) {
-                _serverLogCount = data.log.length;
-            }
-            data.log.slice(_serverLogCount).forEach(msg => {
-                addLog(msg);
-                _serverLogCount++;
+            // Append new server-side log entries by sequence number.
+            // The server now tags each entry with a monotonic seq, so we never
+            // miss entries when the log is trimmed beyond our last seen position.
+            (data.log || []).forEach(function (entry) {
+                if (typeof entry === 'object' && entry !== null && 'seq' in entry) {
+                    if (entry.seq > _serverLogCount) {
+                        addLog(entry.msg);
+                        _serverLogCount = entry.seq;
+                    }
+                } else {
+                    addLog(entry);
+                    _serverLogCount++;
+                }
             });
 
             // Sync bounce markers for court view

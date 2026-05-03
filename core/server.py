@@ -41,6 +41,7 @@ score_state = {
     "team_far": "Team B",
     "status": "idle",
     "log": [],
+    "log_seq": 0,
     "bounces": [],
     "source": None,
     "frame_pos": 0,
@@ -113,11 +114,14 @@ def update_score(serving, receiving, server, server_side=None):
             score_state["server_side"] = server_side
 
 
-# MSG_LOG — appends a log message to score_state (capped at 50)
+# MSG_LOG — appends a log message to score_state (capped at 200)
+# Each entry is tagged with a monotonic sequence number so the dashboard
+# can detect new entries even when the log is trimmed.
 def add_log(message):
     with _lock:
-        score_state["log"].append(message)
-        score_state["log"] = score_state["log"][-50:]
+        score_state["log_seq"] = score_state.get("log_seq", 0) + 1
+        score_state["log"].append({"seq": score_state["log_seq"], "msg": message})
+        score_state["log"] = score_state["log"][-200:]
 
 
 # MSG_BOUNCE — appends a bounce point (court coordinates) to score_state
@@ -174,6 +178,7 @@ def reset_score_state(config=None):
         score_state["team_far"] = "Team B"
         score_state["status"] = "idle"
         score_state["log"] = []
+        score_state["log_seq"] = 0
         score_state["bounces"] = []
         score_state["frame_pos"] = 0
         if config:
@@ -374,10 +379,10 @@ def analysis_page(match_id):
 # Process 1 picks it up in cmd_listener_thread and acts on it.
 @app.route('/start', methods=['POST'])
 def start():
-    # Check if already running
+    # Check if a match is already active (running or paused)
     with _lock:
-        if score_state["status"] == "live":
-            return jsonify({"error": "Already running"}), 409
+        if score_state["status"] in ("live", "paused"):
+            return jsonify({"error": "A match is already active. Click Stop before starting a new one."}), 409
 
     data = request.get_json(force=True, silent=True) or {}
     source = data.get("source", 0)
@@ -445,8 +450,9 @@ def update_score_route():
         score_state["server"] = int(data.get("server", score_state["server"]))
         msg = data.get("log")
         if msg:
-            score_state["log"].append(msg)
-            score_state["log"] = score_state["log"][-50:]   # keep last 50 log entries
+            score_state["log_seq"] = score_state.get("log_seq", 0) + 1
+            score_state["log"].append({"seq": score_state["log_seq"], "msg": msg})
+            score_state["log"] = score_state["log"][-200:]
     return jsonify({"status": "ok"})
 
 
