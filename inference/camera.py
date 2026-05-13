@@ -224,7 +224,7 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
 
                 box_w = (x2 - x1) / frame_w_det
                 box_h = (y2 - y1) / frame_h_det
-                if box_w > 0.03 or box_h > 0.03:
+                if box_w > 0.15 or box_h > 0.15:
                     continue
 
                 cx, cy = (x1 + x2) / 2, (y1 + y2) / 2

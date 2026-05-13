@@ -189,8 +189,9 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
 
     # Setup Video Writer (H.264 via OpenH264 — browser-playable after match ends)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
     out = cv2.VideoWriter(
-        'assets/rewind/raw_video_output.mp4', fourcc, fps, (frame_width, frame_height)
+        f'assets/rewind/raw_video_{match_id}_{timestamp}.mp4', fourcc, fps, (frame_width, frame_height)
     )
     if not out.isOpened():
         logging.error("[Process-1 Tracking] Error: Could not open video writer.")

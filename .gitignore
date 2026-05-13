@@ -5,7 +5,7 @@
 *.weights
 
 # Allow the final trained model only
-!models/best26m-improved4.pt
+!models/best26m-improved5.pt
 
 # Video files
 *.mp4
