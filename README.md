@@ -5,15 +5,6 @@ A real-time pickleball ball tracking and scoring system using **YOLOv11** comput
 ---
 
 ## Demo
-
-> Add a screenshot or screen recording here.
->
-> **Images:** Drop a `.png` into the `docs/` folder, then replace the line below:
-> ```
-> <img width="1860" height="971" alt="dashboard" src="https://github.com/user-attachments/assets/c290e019-ff61-4626-ac8d-3b2271c38b15" />
-> ```
->
-
 https://github.com/user-attachments/assets/b89b8c28-d4fb-47b9-9527-6d0dff7da809
 
 ---
