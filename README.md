@@ -120,7 +120,7 @@ pip install torch torchvision
 ### Run with a video file
 
 ```bash
-python main.py assets/FileNameHere.py
+python main.py assets/FileNameHere.mp4
 ```
 
 ### Run with a live camera
