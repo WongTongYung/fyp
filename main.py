@@ -187,8 +187,8 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
             logging.warning("[Process-1 Tracking] [Camera] FPS not reported, defaulting to %d", fps)
         logging.info("[Process-1 Tracking] [Camera] Resolution: %dx%d, FPS: %d", frame_width, frame_height, fps)
 
-    # Setup Video Writer (H.264 via OpenH264 — browser-playable after match ends)
-    fourcc = cv2.VideoWriter_fourcc(*'avc1')
+    # Setup Video Writer (mp4v — no external DLL required)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     out = cv2.VideoWriter(
         f'assets/rewind/raw_video_{match_id}_{timestamp}.mp4', fourcc, fps, (frame_width, frame_height)
