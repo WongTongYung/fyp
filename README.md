@@ -5,15 +5,6 @@ A real-time pickleball ball tracking and scoring system using **YOLOv11** comput
 ---
 
 ## Demo
-
-> Add a screenshot or screen recording here.
->
-> **Images:** Drop a `.png` into the `docs/` folder, then replace the line below:
-> ```
-> <img width="1860" height="971" alt="dashboard" src="https://github.com/user-attachments/assets/c290e019-ff61-4626-ac8d-3b2271c38b15" />
-> ```
->
-
 https://github.com/user-attachments/assets/b89b8c28-d4fb-47b9-9527-6d0dff7da809
 
 ---
@@ -208,27 +199,7 @@ On Windows 11 with DroidCam / iVCam, the Intel iGPU hardware decoder sleeps aggr
 
 ---
 
-## Roadmap
-
-- [x] Dataset collection and labelling
-- [x] YOLOv11m model training (multiple iterations)
-- [x] Multi-threaded camera capture pipeline
-- [x] Real-time YOLO ball detection
-- [x] Kalman filter ball tracking
-- [x] Court calibration with perspective homography
-- [x] IN / OUT bounce detection
-- [x] Serve detection
-- [x] Full pickleball scoring engine (singles & doubles)
-- [x] Live web dashboard (MJPEG + scoreboard + event log)
-- [x] SQLite match persistence
-- [x] Match video recording & rewind
-- [x] Match history page
-- [x] Post-match analysis (bounce heatmap, score timeline, event breakdown)
-- [x] Windows GPU performance fixes
-
----
-
 ## Author
 
-Final Year Project — Tong Yung  
-Bachelor of Computer Science, 2026
+Final Year Project — Wong Tong Yung 87100  
+Bachelor of Computer Science with Honours (Network Computing), 2025
