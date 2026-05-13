@@ -188,6 +188,7 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         logging.info("[Process-1 Tracking] [Camera] Resolution: %dx%d, FPS: %d", frame_width, frame_height, fps)
 
     # Setup Video Writer (mp4v — no external DLL required)
+    os.makedirs('assets/rewind', exist_ok=True)
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     out = cv2.VideoWriter(
