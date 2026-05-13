@@ -120,7 +120,7 @@ pip install torch torchvision
 ### Run with a video file
 
 ```bash
-python main.py assets/FixedCamera.mp4
+python main.py assets/FileNameHere.py
 ```
 
 ### Run with a live camera
@@ -130,13 +130,13 @@ python main.py 0        # default camera
 python main.py 1        # second camera
 ```
 
-### Run dashboard only (no source — start tracking from the UI)
+### Run without pre-selecting a camera (choose from dashboard Settings)
 
 ```bash
 python main.py
 ```
 
-Then open **http://127.0.0.1:5000** in your browser and press **Start** in the dashboard.
+Then open **http://127.0.0.1:5000**, go to **Settings** to select your camera, then press **Start**. Defaults to camera 0 if no source is changed.
 
 ---
 
