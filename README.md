@@ -83,18 +83,35 @@ pickleball/
 
 ## Requirements
 
-- **Python** 3.10+
+- **Python** 3.10–3.12 (Python 3.13 is not yet supported by PyTorch CUDA builds)
 - **OS:** Windows 10/11 (Linux/macOS: `core/win_perf.py` must be skipped)
 - **GPU:** NVIDIA CUDA GPU recommended for real-time inference
 - **Camera:** USB webcam, DroidCam / iVCam (WiFi), or a video file
 
-Install dependencies:
+### Install steps (verified on Python 3.10 + CUDA 12.4)
 
+**1. Create a virtual environment (recommended):**
 ```bash
-pip install ultralytics opencv-python flask torch torchvision numpy pillow
+py -3.10 -m venv venv
+venv\Scripts\activate
 ```
 
-> **H.264 video recording (Windows):** Place `openh264-1.8.0-win64.dll` in the project root alongside `main.py`. OpenCV looks for it automatically in the working directory to encode match recordings. Without it, the rewind/recording feature will not work. The file is excluded from git (`.gitignore`) so it must be obtained separately.
+**2. Install dependencies:**
+```bash
+pip install ultralytics opencv-python flask numpy pillow
+```
+
+**3a. CUDA GPU acceleration (recommended):**
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+```
+
+**3b. CPU only (slower, works without a GPU):**
+```bash
+pip install torch torchvision
+```
+
+> `lap` (required by ByteTrack) is auto-installed by ultralytics on first run — no manual step needed.
 
 ---
 

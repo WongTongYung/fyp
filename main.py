@@ -266,12 +266,14 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         logging.info("[Process-1 Tracking] Thread started: %s (id=%d)", t.name, t.ident)
 
     # Wait for pipeline to finish
+    _interrupted = False
     try:
         while t1.is_alive() or t3.is_alive():
             t1.join(timeout=0.5)
     except KeyboardInterrupt:
         logging.info("[Process-1 Tracking] Ctrl+C received, stopping...")
         stop_event.set()
+        _interrupted = True
 
     for t in (t1, t2, t3, t4):
         t.join()
@@ -286,6 +288,9 @@ def run_pipeline(source, state_queue, shm, shm_lock, cmd_queue, model, config=No
         cap.release()
     out.release()
     cv2.destroyAllWindows()
+
+    if _interrupted:
+        raise KeyboardInterrupt
 
 
 def run_tracking_loop(cmd_queue, state_queue, shm, shm_lock, model,
@@ -344,7 +349,14 @@ if __name__ == "__main__":
 
     # --- Load YOLO model (only in tracking process) ---
     model = YOLO(BALL_MODEL_PATH)
-    model.to("cuda")
+    device = "cuda" 
+    if torch.cuda.is_available():
+        device = "cuda" 
+    else :
+        "cpu"
+    if device == "cpu":
+        logging.warning("[Process-1 Tracking] CUDA not available — running on CPU. Inference will be slower.")
+    model.to(device)
 
     # Argument safety check
     src = None
