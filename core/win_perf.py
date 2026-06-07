@@ -26,6 +26,7 @@ def win32_perf_setup():
     # 2) Disable EcoQoS power throttling for this process
     try:
         class PROCESS_POWER_THROTTLING_STATE(ctypes.Structure):
+            """Win32 PROCESS_POWER_THROTTLING_STATE struct used with SetProcessInformation."""
             _fields_ = [
                 ("Version", ctypes.wintypes.ULONG),
                 ("ControlMask", ctypes.wintypes.ULONG),
@@ -80,6 +81,7 @@ def keep_igpu_alive():
     user32.DefWindowProcW.restype = LRESULT
 
     def wnd_proc(hwnd, msg, wparam, lparam):
+        """Win32 window procedure: triggers a repaint on WM_TIMER to keep the iGPU active."""
         WM_DESTROY = 0x0002
         WM_TIMER = 0x0113
         if msg == WM_TIMER:
@@ -93,6 +95,7 @@ def keep_igpu_alive():
     wnd_proc_cb = WNDPROC(wnd_proc)
 
     class WNDCLASSW(ctypes.Structure):
+        """Win32 WNDCLASSW struct used with RegisterClassW."""
         _fields_ = [
             ("style", ctypes.c_uint),
             ("lpfnWndProc", WNDPROC),

@@ -1,4 +1,7 @@
-// --- Clock ---
+/**
+ * Updates the header clock display to the current local time.
+ * Called once on load, then on a 1-second interval.
+ */
 function updateClock() {
     const now = new Date();
     let hours = now.getHours();
@@ -27,6 +30,10 @@ let setupServerNum = 1;
 let lastBounce = null;          // { result: 'IN'|'OUT', time: ms }
 const BOUNCE_DISPLAY_MS = 2500; // how long to show the badge
 
+/**
+ * Syncs all scoreboard DOM elements with the current score state.
+ * Resolves team name labels dynamically from the settings inputs.
+ */
 function updateScoreboard() {
     document.getElementById('servingScore').textContent = String(servingScore).padStart(2, '0');
     document.getElementById('receivingScore').textContent = String(receivingScore).padStart(2, '0');
@@ -41,6 +48,9 @@ function updateScoreboard() {
     document.getElementById('receivingLabel').textContent = receivingName + ' (Receiving)';
 }
 
+/**
+ * Shows or hides the server-number controls based on the current game mode (singles vs doubles).
+ */
 function updateModeUI() {
     var isSingles = gameMode === 'singles';
     document.getElementById('modeBadge').textContent = isSingles ? 'Singles' : 'Doubles';
@@ -49,7 +59,11 @@ function updateModeUI() {
     document.getElementById('serverPlus').style.display = isSingles ? 'none' : '';
 }
 
-// --- Log ---
+/**
+ * Appends a message to the on-screen log box and auto-scrolls to the latest entry.
+ *
+ * @param {string} message - The log text to display.
+ */
 function addLog(message) {
     const logBox = document.getElementById('logBox');
     const entry = document.createElement('div');
@@ -59,7 +73,10 @@ function addLog(message) {
     logBox.scrollTop = logBox.scrollHeight;
 }
 
-// --- Setup toggles ---
+/**
+ * Attaches click handlers to the mode (singles/doubles) and server-side toggle buttons.
+ * Keeps the active highlight in sync and updates dependent UI on each change.
+ */
 function initToggles() {
     document.querySelectorAll('[data-mode]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -185,13 +202,19 @@ document.getElementById('rewindBtn').addEventListener('click', function () {
         .catch(err => addLog('Rewind failed: ' + err));
 });
 
+/**
+ * Points the video element to the live MJPEG stream from the server.
+ */
 function switchToLiveFeed() {
     const live = document.getElementById('liveFeed');
     live.src = '/video_feed';
 }
 
-// --- Keyboard shortcuts for testing scores ---
-// Press 's' to add point to serving team, 'r' for receiving, 'n' to switch server
+/**
+ * POSTs the current score state to the server for persistence.
+ *
+ * @param {string} log - Message describing the score change (stored in match history).
+ */
 function postScore(log) {
     fetch('/update_score', {
         method: 'POST',
@@ -284,7 +307,11 @@ document.addEventListener('keydown', function (e) {
     }
 });
 
-// --- Live Stats ---
+/**
+ * Updates the live stat counters (total points, side outs, IN/OUT/SERVE bounce tallies).
+ *
+ * @param {Object} data - Score state response from /score; expects data.log and data.bounces arrays.
+ */
 function updateLiveStats(data) {
     document.getElementById('statTotalPts').textContent = servingScore + receivingScore;
 
@@ -309,7 +336,10 @@ function updateLiveStats(data) {
     document.getElementById('statServe').textContent = serveCount;
 }
 
-// --- Poll Flask /score every second ---
+/**
+ * Polls /score every second and syncs score, server state, game mode, status text,
+ * server-side log entries, and court bounces. Silently ignores errors when the server is not running.
+ */
 function pollScore() {
     fetch('/score')
         .then(r => r.json())
@@ -345,8 +375,23 @@ function pollScore() {
                 isRunning = false;
                 statusEl.textContent = '(Status: Stopped)';
                 statusEl.classList.remove('live');
+            } else if (data.status === 'finished') {
+                isRunning = false;
+                const winner = data.winner || 'Team';
+                const finalScore = data.final_score || '';
+                statusEl.textContent = `(Status: Match Won by ${winner} ${finalScore})`;
+                statusEl.classList.remove('live');
+                if (!window._matchEndShown) {
+                    window._matchEndShown = true;
+                    alert(`Match Won!\n\n${winner} wins ${finalScore}`);
+                }
             } else if (data.status === 'shutdown') {
                 window.close();
+            }
+
+            // Reset match-end flag when a new match starts
+            if (data.status === 'live') {
+                window._matchEndShown = false;
             }
 
             // Append new server-side log entries by sequence number.
@@ -383,6 +428,10 @@ let currentBallCourt = null; // {x, y} in cm, from SSE detections
 const CW = 609.6, CL = 1341.12, NET_Y = 670.56;
 const KITCHEN_NEAR = 457.2, KITCHEN_FAR = 883.92, CENTER_X = 304.8;
 
+/**
+ * Renders the real-time top-down court canvas with bounce markers and the live ball position.
+ * Redrawn on every SSE detection event and each score poll cycle.
+ */
 function drawCourtView() {
     const parent = courtCanvas.parentElement;
     const W = courtCanvas.width = parent.clientWidth || 200;
@@ -521,6 +570,12 @@ detSource.onmessage = function (e) {
     drawCourtView();
 };
 
+/**
+ * Draws YOLO detection boxes, court polygon outline, FPS badge, and bounce result badge
+ * onto the transparent overlay canvas positioned over the live video feed.
+ *
+ * @param {Object} data - SSE detection payload with detections[], court[], frame_w, frame_h, fps.
+ */
 function drawOverlay(data) {
     const img = document.getElementById('liveFeed');
     const rect = img.getBoundingClientRect();
@@ -644,7 +699,10 @@ function drawOverlay(data) {
     }
 }
 
-// --- Calibration Modal ---
+/**
+ * Calibration Modal — self-contained IIFE that handles court corner/net point collection,
+ * frame capture, and saving calibration data to the server via /calibrate/save.
+ */
 (function () {
     const LABELS = ['TL', 'TR', 'BR', 'BL', 'Net-L', 'Net-R'];
     const COLORS = ['#00ff00', '#00ff00', '#00ff00', '#00ff00', '#ffeb3b', '#ffeb3b'];
@@ -656,6 +714,10 @@ function drawOverlay(data) {
     const cCtx = cvs.getContext('2d');
     const statusEl = document.getElementById('calibrateStatus');
 
+    /**
+     * Updates the calibration status text and enables/disables the Save button
+     * based on how many of the 6 required points have been marked.
+     */
     function updateStatus() {
         if (!calibImg) {
             statusEl.textContent = 'Click "Capture" to grab a frame';
@@ -667,6 +729,10 @@ function drawOverlay(data) {
         document.getElementById('calibrateSave').disabled = calibPoints.length < 6;
     }
 
+    /**
+     * Redraws the calibration canvas with the captured frame, marked corner/net points,
+     * and a preview outline of the court boundary and net line.
+     */
     function drawCalibration() {
         if (!calibImg) return;
         cCtx.drawImage(calibImg, 0, 0, cvs.width, cvs.height);

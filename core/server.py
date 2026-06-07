@@ -83,6 +83,7 @@ _SETUP_KEYS = ("serving", "receiving", "server", "server_side",
 
 # MSG_FRAME_READY — writes raw frame into _frame, wakes _jpeg_encoder_thread
 def push_frame(frame):
+    """Rate-limit incoming frames and store in _frame; wakes the JPEG encoder thread."""
     global _frame, _last_push_time
     now = time.time()
     if now - _last_push_time < 1.0 / STREAM_FPS:
@@ -95,6 +96,7 @@ def push_frame(frame):
 
 # MSG_DETECTIONS — writes ball/court detection JSON into _det_data, wakes _generate_detections
 def push_detections(detections, frame_w, frame_h, court=None, det_fps=0):
+    """Serialise YOLO detection results to JSON and wake the SSE generator thread."""
     global _det_data
     data = {"detections": detections, "frame_w": frame_w, "frame_h": frame_h, "fps": det_fps}
     if court is not None:
@@ -106,6 +108,7 @@ def push_detections(detections, frame_w, frame_h, court=None, det_fps=0):
 
 # MSG_SCORE_UPDATE — updates serving/receiving scores in score_state
 def update_score(serving, receiving, server, server_side=None):
+    """Update serving/receiving scores and server number in the shared score state."""
     with _lock:
         score_state["serving"] = serving
         score_state["receiving"] = receiving
@@ -118,6 +121,7 @@ def update_score(serving, receiving, server, server_side=None):
 # Each entry is tagged with a monotonic sequence number so the dashboard
 # can detect new entries even when the log is trimmed.
 def add_log(message):
+    """Append a sequenced log entry to score_state (capped at 200 entries)."""
     with _lock:
         score_state["log_seq"] = score_state.get("log_seq", 0) + 1
         score_state["log"].append({"seq": score_state["log_seq"], "msg": message})
@@ -126,6 +130,7 @@ def add_log(message):
 
 # MSG_BOUNCE — appends a bounce point (court coordinates) to score_state
 def add_bounce(court_x, court_y, result):
+    """Record a bounce event (court coordinates in cm, result IN/OUT) in score_state (capped at 50)."""
     with _lock:
         score_state["bounces"].append({
             "court_x": round(court_x, 1),
@@ -137,6 +142,7 @@ def add_bounce(court_x, court_y, result):
 
 # MSG_SERVE — appends a serve point to score_state (same list as bounces)
 def add_serve(court_x, court_y, side):
+    """Record a serve event into the bounces list (result='SERVE') for display on the court map."""
     with _lock:
         score_state["bounces"].append({
             "court_x": round(court_x, 1),
@@ -147,20 +153,27 @@ def add_serve(court_x, court_y, side):
         score_state["bounces"] = score_state["bounces"][-50:]
 
 
-# MSG_STATUS — updates pipeline status ("live" / "paused" / "stopped")
-def set_status(status):
+# MSG_STATUS — updates pipeline status ("live" / "paused" / "stopped" / "finished")
+def set_status(status, winner=None, final_score=None):
+    """Update the pipeline status string and optionally store match winner and final score."""
     with _lock:
         score_state["status"] = status
+        if winner is not None:
+            score_state["winner"] = winner
+        if final_score is not None:
+            score_state["final_score"] = final_score
 
 
 # MSG_SOURCE — stores the video source so the dashboard knows what is playing
 def set_source(source):
+    """Store the active video source (file path or None for webcam) in score_state."""
     with _lock:
         score_state["source"] = source if source != 0 else None
 
 
 # MSG_FRAME_POS — updates current frame position (used for video file progress bar)
 def set_frame_pos(frame_pos, fps):
+    """Update the current video file frame position and FPS (used for the progress bar)."""
     with _lock:
         score_state["frame_pos"] = frame_pos
         score_state["fps"] = fps
@@ -168,6 +181,7 @@ def set_frame_pos(frame_pos, fps):
 
 # MSG_RESET — wipes all scores back to zero; also called by /start route
 def reset_score_state(config=None):
+    """Reset all score and match state to defaults, optionally applying a new setup config."""
     with _lock:
         score_state["serving"] = 0
         score_state["receiving"] = 0
@@ -181,6 +195,8 @@ def reset_score_state(config=None):
         score_state["log_seq"] = 0
         score_state["bounces"] = []
         score_state["frame_pos"] = 0
+        score_state.pop("winner", None)
+        score_state.pop("final_score", None)
         if config:
             for k in _SETUP_KEYS:
                 if k in config:
@@ -195,6 +211,7 @@ def reset_score_state(config=None):
 # Called by: init_display_process() — runs as a permanent background thread
 # Waits for push_frame() to signal a new frame, encodes it to JPEG, stores in _jpeg_buffer
 def _jpeg_encoder_thread():
+    """Background thread: waits for new frames, encodes to JPEG (max 1280px wide), stores in _jpeg_buffer."""
     last_frame = None
     while True:
         _frame_event.wait(timeout=1.0)
@@ -219,6 +236,7 @@ def _jpeg_encoder_thread():
 
 # Called by: /video_feed route — yields MJPEG frames to the browser <img> tag
 def _generate_frames():
+    """Generator: yields MJPEG-boundary-wrapped JPEG frames for the /video_feed multipart response."""
     while True:
         _jpeg_event.wait(timeout=1.0)
         _jpeg_event.clear()
@@ -232,6 +250,7 @@ def _generate_frames():
 
 # Called by: /detections route — yields SSE events with ball/court data to the browser canvas
 def _generate_detections():
+    """Generator: yields SSE-formatted detection JSON events for the /detections stream."""
     last_payload = None
     while True:
         _det_event.wait(timeout=2.0)
@@ -249,6 +268,7 @@ def _generate_detections():
 
 # Called by: /start route — reads current setup config to pass into the new match
 def get_setup_config():
+    """Return the current setup config keys from score_state (mode, team names, server side, etc.)."""
     with _lock:
         return {k: score_state[k] for k in _SETUP_KEYS}
 
@@ -310,7 +330,7 @@ def _ipc_recv_thread():
             add_serve(msg["court_x"], msg["court_y"], msg["side"])
 
         elif msg_type == MSG_STATUS:
-            set_status(msg["status"])
+            set_status(msg["status"], msg.get("winner"), msg.get("final_score"))
 
         elif msg_type == MSG_SOURCE:
             set_source(msg["source"])
@@ -349,11 +369,13 @@ def init_display_process(cmd_queue, state_queue, shm_name, shm_lock):
 # Return a full HTML page rendered by Jinja2 from a template in dashboard/
 @app.route('/')
 def index():
+    """Serve the main dashboard page."""
     return render_template('index.html')
 
 
 @app.route('/matches')
 def matches_list():
+    """Serve the match history page with a human-readable duration computed for each match."""
     # Compute human-readable duration for each match before passing to the template
     matches = get_all_matches()
     for m in matches:
@@ -371,6 +393,7 @@ def matches_list():
 
 @app.route('/analysis/<int:match_id>')
 def analysis_page(match_id):
+    """Serve the per-match analysis page."""
     return render_template('analysis.html', match_id=match_id)
 
 
@@ -379,6 +402,7 @@ def analysis_page(match_id):
 # Process 1 picks it up in cmd_listener_thread and acts on it.
 @app.route('/start', methods=['POST'])
 def start():
+    """POST /start — validate, reset state, and send CMD_START to the tracking process."""
     # Check if a match is already active (running or paused)
     with _lock:
         if score_state["status"] in ("live", "paused"):
@@ -408,6 +432,7 @@ def start():
 
 @app.route('/pause', methods=['POST'])
 def pause():
+    """POST /pause — pause the tracking pipeline."""
     if _cmd_queue:
         _cmd_queue.put({"type": CMD_PAUSE})
     set_status("paused")
@@ -416,6 +441,7 @@ def pause():
 
 @app.route('/resume', methods=['POST'])
 def resume():
+    """POST /resume — resume a paused pipeline."""
     if _cmd_queue:
         _cmd_queue.put({"type": CMD_RESUME})
     set_status("live")
@@ -424,6 +450,7 @@ def resume():
 
 @app.route('/stop', methods=['POST'])
 def stop():
+    """POST /stop — stop the tracking pipeline entirely."""
     if _cmd_queue:
         _cmd_queue.put({"type": CMD_STOP})
     set_status("stopped")
@@ -432,6 +459,7 @@ def stop():
 
 @app.route('/rewind', methods=['POST'])
 def rewind():
+    """POST /rewind — pause tracking and trigger rewind clip generation in the tracking process."""
     global _rewind_requested_at
     if _cmd_queue:
         _cmd_queue.put({"type": CMD_REWIND})
@@ -442,6 +470,7 @@ def rewind():
 
 @app.route('/update_score', methods=['POST'])
 def update_score_route():
+    """POST /update_score — manual score override from the dashboard, bypassing Process 1."""
     # Manual score override from the dashboard; updates score_state directly without going to Process 1
     data = request.get_json(force=True, silent=True) or {}
     with _lock:
@@ -458,6 +487,7 @@ def update_score_route():
 
 @app.route('/swap_side', methods=['POST'])
 def swap_side():
+    """POST /swap_side — toggle server_side between near and far when players switch ends."""
     # Toggles server_side between "near" and "far" when players switch ends
     with _lock:
         cur = score_state["server_side"]
@@ -467,6 +497,7 @@ def swap_side():
 
 @app.route('/calibrate/save', methods=['POST'])
 def calibrate_save():
+    """POST /calibrate/save — save 4 corners + 2 net points to court.json and signal Process 1 to reload."""
     # Receives 4 corner points + 2 net points, saves to court.json,
     # then sends CMD_RECALIBRATE so Process 1 reloads the court geometry
     data = request.get_json(force=True, silent=True) or {}
@@ -493,12 +524,14 @@ def calibrate_save():
 #   /rewind_feed   - MJPEG stream of the saved rewind clip
 @app.route('/score')
 def score():
+    """GET /score — return the full score_state dict as JSON (polled by the dashboard every second)."""
     with _lock:
         return jsonify(score_state)
 
 
 @app.route('/video_feed')
 def video_feed():
+    """GET /video_feed — stream live MJPEG frames to the browser <img> element."""
     # multipart/x-mixed-replace keeps the HTTP connection open and replaces the image on each frame
     return Response(_generate_frames(),
                     mimetype='multipart/x-mixed-replace; boundary=frame')
@@ -506,6 +539,7 @@ def video_feed():
 
 @app.route('/detections')
 def detections_feed():
+    """GET /detections — stream SSE detection events (ball position, court polygon, FPS) to the browser."""
     # SSE: browser keeps connection open and receives a new JSON event per frame
     return Response(_generate_detections(),
                     mimetype='text/event-stream',
@@ -514,6 +548,7 @@ def detections_feed():
 
 @app.route('/rewind_status')
 def rewind_status():
+    """GET /rewind_status — return whether the rewind clip is ready (file newer than request timestamp)."""
     # Polled by the dashboard JS; returns ready=true once the clip file is newer than the request time
     clip_path = os.path.join(_ROOT, 'assets', 'rewind', 'rewind_clip.bin')
     ready = False
@@ -525,12 +560,14 @@ def rewind_status():
 
 @app.route('/rewind_feed')
 def rewind_feed():
+    """GET /rewind_feed — stream the saved rewind clip as MJPEG at the original capture FPS."""
     # Streams the saved rewind clip as MJPEG, frame by frame at original fps
     clip_path = os.path.join(_ROOT, 'assets', 'rewind', 'rewind_clip.bin')
     if not os.path.exists(clip_path):
         return jsonify({"error": "No rewind clip"}), 404
 
     def generate():
+        """Read and yield JPEG frames from the binary rewind clip in a continuous loop."""
         with open(clip_path, 'rb') as f:
             header = f.read(8)
             count, fps = struct.unpack('<II', header)
@@ -556,6 +593,7 @@ def rewind_feed():
 # One-shot: read from disk or DB, return the result, connection closes.
 @app.route('/api/analysis/<int:match_id>')
 def analysis_data(match_id):
+    """GET /api/analysis/<match_id> — return full match data as JSON, converting bounce pixel coords to court cm."""
     # Returns full match data as JSON; consumed by analysis.html JS
     # Converts pixel bounce coordinates to court coordinates (cm) using the homography matrix
     summary = get_match_summary(match_id)
@@ -595,6 +633,7 @@ def analysis_data(match_id):
 
 @app.route('/calibrate/frame')
 def calibrate_frame():
+    """GET /calibrate/frame — return a JPEG snapshot of the current live frame for the calibration UI."""
     # Returns a single JPEG snapshot of the current frame for the calibration UI
     with _frame_lock:
         frame = _frame
@@ -606,6 +645,7 @@ def calibrate_frame():
 
 @app.route('/calibrate/load')
 def calibrate_load():
+    """GET /calibrate/load — return existing court.json data so the calibration UI can show prior points."""
     # Returns existing court.json so the calibration UI can pre-fill prior points
     if not os.path.exists(COURT_FILE):
         return jsonify({"exists": False})
@@ -616,6 +656,7 @@ def calibrate_load():
 
 @app.route('/assets/<path:filename>')
 def assets(filename):
+    """Serve files from assets/; disables caching for .mp4 so the browser always fetches a fresh copy."""
     # Serves video and other asset files; disables cache for .mp4 so browser always fetches fresh
     mime = 'video/mp4' if filename.endswith('.mp4') else None
     resp = send_from_directory(os.path.join(_ROOT, 'assets'), filename, mimetype=mime)
@@ -626,11 +667,13 @@ def assets(filename):
 
 @app.route('/css/<path:filename>')
 def css(filename):
+    """Serve CSS files from dashboard/css/."""
     return send_from_directory(os.path.join(_ROOT, 'dashboard', 'css'), filename)
 
 
 @app.route('/js/<path:filename>')
 def js(filename):
+    """Serve JS files from dashboard/js/."""
     return send_from_directory(os.path.join(_ROOT, 'dashboard', 'js'), filename)
 
 

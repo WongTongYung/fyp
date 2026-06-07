@@ -29,3 +29,7 @@ RALLY_END_SEC = 2.0          # seconds with no ball before rally is considered o
 HISTORY_SIZE = 5             # recent positions kept for velocity calculation
 SERVE_VELOCITY_THRESH = 120  # pixels/frame displacement to trigger serve detection
 SERVE_FALLBACK_SEC = 10      # seconds before falling back to bounce-based rally
+
+# --- Match End ---
+WINNING_SCORE = 11           # points required to win a pickleball game
+WIN_BY_MARGIN = 2            # must win by this margin (e.g., 11-9 wins, 11-10 doesn't)

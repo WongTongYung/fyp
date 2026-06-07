@@ -16,6 +16,7 @@ def calibrate_court(frame):
     labels = ["TL", "TR", "BR", "BL", "Net-L", "Net-R"]
 
     def on_click(event, x, y, flags, param):
+        """Record a clicked point in original image coordinates, scaled back from the display size."""
         if event == cv2.EVENT_LBUTTONDOWN and len(points) < 6:
             scale_x, scale_y = param
             points.append((int(x / scale_x), int(y / scale_y)))
@@ -59,6 +60,7 @@ def calibrate_court(frame):
 # --- Save / Load ---
 
 def _save(corners, net=None):
+    """Persist court corners and optional net line to court.json."""
     payload = {"corners": corners.tolist()}
     payload["net"] = net.tolist() if net is not None else None
     with open(COURT_FILE, "w") as f:
@@ -67,6 +69,7 @@ def _save(corners, net=None):
 
 
 def load_court():
+    """Load court corners and net line from court.json. Returns (corners, net) or None if not found."""
     if not os.path.exists(COURT_FILE):
         return None
     with open(COURT_FILE, "r") as f:

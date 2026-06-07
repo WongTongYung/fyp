@@ -1,6 +1,9 @@
 const MATCH_ID = parseInt(document.querySelector('meta[name="match-id"]').content, 10);
 
-// Clock
+/**
+ * Updates the header clock display to the current local time.
+ * Called once on load, then on a 1-second interval.
+ */
 function updateClock() {
     const now = new Date();
     let h = now.getHours(), m = String(now.getMinutes()).padStart(2,'0');
@@ -12,16 +15,31 @@ updateClock(); setInterval(updateClock, 1000);
 
 document.getElementById('matchId').textContent = MATCH_ID;
 
+/**
+ * Formats a raw seconds value into a human-readable duration string.
+ *
+ * @param {number} seconds - Total duration in seconds.
+ * @returns {string} Formatted string e.g. "3m 42s", or "—" if unavailable.
+ */
 function fmtDuration(seconds) {
     if (!seconds || seconds <= 0) return '—';
     return Math.floor(seconds / 60) + 'm ' + Math.floor(seconds % 60) + 's';
 }
 
-// --- Court bounce map (top-down, same as live dashboard) ---
-// Court dimensions in cm
-const CW = 609.6, CL = 1341.12, NET_Y = 670.56;
-const KITCHEN_NEAR = 457.2, KITCHEN_FAR = 883.92, CENTER_X = 304.8;
+// Court dimensions in cm — standard pickleball court
+const CW = 609.6; 
+const CL = 1341.12; 
+const NET_Y = 670.56;
+const KITCHEN_NEAR = 457.2;
+const KITCHEN_FAR = 883.92
+const CENTER_X = 304.8;
 
+/**
+ * Renders a top-down court diagram with bounce and serve markers onto the canvas.
+ *
+ * @param {Array} courtPoly - Corner points of the detected court polygon (unused for drawing, reserved for future overlay).
+ * @param {Array} bounces   - Bounce events; each has court_x, court_y (cm) and result ("IN" | "OUT" | "SERVE").
+ */
 function drawCourtMap(courtPoly, bounces) {
     const canvas = document.getElementById('courtCanvas');
     const ctx = canvas.getContext('2d');
@@ -133,7 +151,12 @@ function drawCourtMap(courtPoly, bounces) {
     });
 }
 
-// --- Score timeline chart ---
+/**
+ * Builds a stepped line chart showing how server and receiver scores evolved over time.
+ *
+ * @param {Array}  scores     - Score events; each has timestamp, server_score, receiver_score.
+ * @param {string} matchStart - ISO timestamp of match start used to compute elapsed seconds on the x-axis.
+ */
 function buildScoreChart(scores, matchStart) {
     const startMs = new Date(matchStart).getTime();
 
@@ -191,7 +214,10 @@ function buildScoreChart(scores, matchStart) {
     });
 }
 
-// --- Fetch & render ---
+/**
+ * Fetches all match data from the API and populates the stats, bounce map, and score chart.
+ * Falls back to an error message in the grid if the request fails.
+ */
 fetch('/api/analysis/' + MATCH_ID)
     .then(r => r.json())
     .then(data => {

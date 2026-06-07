@@ -1,9 +1,10 @@
 import queue
 import time
-from config import RALLY_END_SEC, HISTORY_SIZE, SERVE_VELOCITY_THRESH, SERVE_FALLBACK_SEC
+from config import (RALLY_END_SEC, HISTORY_SIZE, SERVE_VELOCITY_THRESH,
+                    SERVE_FALLBACK_SEC, WINNING_SCORE, WIN_BY_MARGIN)
 from core.database import log_event, log_score
 from core.calibration import is_in_court, get_court_half, pixel_to_court
-from core.ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE
+from core.ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE, MSG_STATUS
 
 
 # --- Pickleball scoring rules ---
@@ -13,7 +14,23 @@ from core.ipc import MSG_SCORE_UPDATE, MSG_LOG, MSG_BOUNCE, MSG_SERVE
 
 
 class GameState:
+    """
+    Manages all pickleball scoring and rally logic for one match.
+
+    Tracks ball positions, detects serves and bounces, applies scoring rules
+    (side-out, server wins point, match end), and pushes updates to the display process.
+    """
+
     def __init__(self, match_id, court_container, state_queue, setup_config):
+        """
+        Initialise match state from setup config passed from the display process.
+
+        Args:
+            match_id (int): DB match ID used for logging events.
+            court_container (dict): Shared dict with poly, net, H, and a threading.Lock.
+            state_queue (multiprocessing.Queue): IPC queue to the display process.
+            setup_config (dict): Starting conditions — mode, team names, initial server/score.
+        """
         self.match_id = match_id
         self.court_container = court_container
         self.state_queue = state_queue
@@ -48,6 +65,9 @@ class GameState:
         self.score_cooldown_until = time.monotonic() + 5.0  # ignore first 5s (pre-game toss-backs)
         # if no serve detected after this, fall back to bounce-based rally
         self.SERVE_FALLBACK_SEC = SERVE_FALLBACK_SEC
+
+        # Match end tracking
+        self.match_over = False
 
     def _send(self, msg):
         """Send a message to the display process via state_queue (non-blocking)."""
@@ -94,6 +114,7 @@ class GameState:
         self._send({"type": MSG_LOG, "message": f"[{event_type}] {notes or ''}"})
 
     def server_wins_point(self):
+        """Award a point to the serving team, log the score, and check for match end."""
         self.server_score += 1
         log_score(self.match_id, self.server_score,
                   self.receiver_score, self.server_number)
@@ -111,6 +132,25 @@ class GameState:
             "server": self.server_number,
             "server_side": self.server_side,
         })
+        self._check_match_end()
+
+    def _check_match_end(self):
+        """Detect win condition: reach WINNING_SCORE with at least WIN_BY_MARGIN lead."""
+        if self.match_over:
+            return
+        if (self.server_score >= WINNING_SCORE and
+                (self.server_score - self.receiver_score) >= WIN_BY_MARGIN):
+            self.match_over = True
+            winner = self._team_name(self.server_side)
+            final_score = f"{self.server_score}-{self.receiver_score}"
+            self._push("match_won",
+                       notes=f"Match won by {winner} ({final_score})")
+            self._send({
+                "type": MSG_STATUS,
+                "status": "finished",
+                "winner": winner,
+                "final_score": final_score,
+            })
 
     def side_out(self):
         """Server loses rally — switch service."""
@@ -140,6 +180,8 @@ class GameState:
 
     def resolve_rally(self):
         """Use the last recorded bounce to decide who won the rally."""
+        if self.match_over:
+            return
         if not self.rally_bounces:
             return
         if len(self.rally_bounces) < 2:
