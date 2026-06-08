@@ -1,0 +1,15 @@
+ultralytics
+opencv-python
+flask
+numpy
+pillow
+torch
+torchvision
+
+# NOTE: For CUDA GPU acceleration (recommended), install torch with:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#
+# For CPU only:
+#   pip install torch torchvision
+
+# Github link: https://github.com/WongTongYung/fyp.git
