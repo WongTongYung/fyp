@@ -33,7 +33,6 @@ Pickleball*/
 
 # Large runtime and training assets (local only)
 assets/rewind/
-assets/trainingData/
 
 # Court calibration (user-specific, must recalibrate per setup)
 data/court.json

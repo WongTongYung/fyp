@@ -4,6 +4,7 @@ import time
 import os
 import ctypes
 import cv2
+import torch
 from collections import deque
 
 from config import STREAM_FPS, REWIND_BUF_SEC
@@ -186,6 +187,10 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
     _use_track = True   # flips to False if lap is not installed
     tracker = BallKalmanTracker(dt=1.0, process_noise=100.0, measurement_noise=5.0)
 
+    # Pick device once: GPU if present, else CPU. FP16 (half) only helps on GPU.
+    infer_device = "cuda" if torch.cuda.is_available() else "cpu"
+    infer_half = infer_device == "cuda"
+
     while not stop_event.is_set():
         try:
             frame = process_queue.get(timeout=0.1)
@@ -200,11 +205,11 @@ def processing_thread(process_queue, stop_event, model, coord_queue,
         try:
             if _use_track:
                 results = model.track(inference_frame, conf=0.4, verbose=False, imgsz=640,
-                                      device="cuda", half=True, persist=True,
+                                      device=infer_device, half=infer_half, persist=True,
                                       tracker="bytetrack.yaml")
             else:
                 results = model.predict(inference_frame, conf=0.4, verbose=False, imgsz=640,
-                                        device="cuda", half=True)
+                                        device=infer_device, half=infer_half)
         except Exception as e:
             if _use_track and "lap" in str(e).lower():
                 print("[Processing] lap not installed — falling back to predict(). "

@@ -10,6 +10,7 @@ config.TRAINING_DATA_PATH.
 
 import sys
 sys.path.insert(0, ".")
+import torch
 from ultralytics import YOLO
 from config import TRAINING_DATA_PATH, BALL_MODEL_PATH
 
@@ -21,7 +22,7 @@ def train_model():
     model.train(
         data=TRAINING_DATA_PATH,
         imgsz=640,
-        device='0',
+        device=0 if torch.cuda.is_available() else 'cpu',
         batch=4,
         epochs=100,
         workers=10,

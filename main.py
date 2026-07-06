@@ -349,11 +349,7 @@ if __name__ == "__main__":
 
     # --- Load YOLO model (only in tracking process) ---
     model = YOLO(BALL_MODEL_PATH)
-    device = "cuda" 
-    if torch.cuda.is_available():
-        device = "cuda" 
-    else :
-        "cpu"
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     if device == "cpu":
         logging.warning("[Process-1 Tracking] CUDA not available — running on CPU. Inference will be slower.")
     model.to(device)
